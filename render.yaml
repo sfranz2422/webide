@@ -1,0 +1,26 @@
+# WebIDE shares PyIDE's existing Postgres instead of provisioning a second one.
+#
+# The two apps never touch the same objects: PyIDE owns the `snippets` table
+# (and ix_snippets_slug, snippets_id_seq), WebIDE owns `projects` (and
+# ix_projects_slug, projects_id_seq). Each app's create_all() only creates its
+# own table, and each only ever queries its own, so even an identical share
+# slug in both tables is harmless.
+#
+# There is no `databases:` block on purpose. DATABASE_URL is marked
+# sync: false, so Render asks for it at deploy time — paste PyIDE's database
+# Internal Connection String there.
+
+services:
+  - type: web
+    name: webide
+    runtime: python
+    # 0.5 CPU / 512 MB, the same plan PyIDE runs on
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 60
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DATABASE_URL
+        sync: false
