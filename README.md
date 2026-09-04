@@ -196,6 +196,23 @@ export. The preview also loads the library with `crossorigin="anonymous"` so
 any future library error shows its real message, and says plainly when the
 library failed to define itself.
 
+### The sprite panel
+
+**Sprites** in the toolbar opens a searchable grid of all 60 bundled images
+with their names and pixel sizes — the same panel as the Python editor. The
+button only appears once a project is a game, and disappears again if the
+library tag is removed.
+
+Clicking a sprite inserts the line students actually mistype:
+
+```js
+loadSprite("bean", "sprites/bean.png");
+```
+
+The name and the path have to agree, and getting one of them wrong is the
+commonest reason a sprite silently doesn't appear. The insert goes into
+`script.js` (or whichever `.js` tab is open), not into the HTML.
+
 ### How sprites reach the preview
 
 Two details that are easy to get wrong, both settled by testing rather than
