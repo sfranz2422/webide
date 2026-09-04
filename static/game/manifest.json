@@ -302,6 +302,7 @@
    "h": 52
   }
  ],
- "kaplaySha256": "e5e529a7bdfda9630babe75be4437f02d41676bb10da7b25b63557b2abeecddd",
- "kaplayBytes": 188533
+ "kaplaySha256": "53a20dac4adc1d72aba81c0acb0000051701d07e33285c7cf4dcaeda62d4072e",
+ "kaplayBytes": 188581,
+ "kaplayNote": "adapted from the ES module build by tools/vendor.py"
 }

@@ -14,6 +14,7 @@ breaking change. Pin the version here, not in a URL that can drift.
 import argparse
 import json
 import os
+import re
 import shutil
 import struct
 import sys
@@ -39,6 +40,38 @@ def png_size(path):
     return struct.unpack(">II", head[16:24])
 
 
+ESM_EXPORT = re.compile(r"export\s*\{[^}]*\};?")
+
+
+def adapt_if_module(text):
+    """Turn the ES module build into something a classic <script> can load.
+
+    npm ships two builds. `dist/kaplay.js` defines a global; `dist/kaplay.mjs`
+    ends in `export{...}`, which is a syntax error in a classic script — the
+    page then fails with a bare cross-origin "Script error." and every later
+    line dies with "kaplay is not defined", pointing at the student's file
+    rather than the real cause. If we somehow end up with the module build,
+    adapt it rather than shipping something broken.
+
+    Returns (text, adapted).
+    """
+    m = ESM_EXPORT.search(text)
+    if not m:
+        return text, False
+    # `var hw=ic` immediately precedes the export: hw is the entry point, and a
+    # top-level var in a classic script is already a global.
+    alias = re.search(r"var\s+(\w+)\s*=\s*\w+;\s*$", text[:m.start()])
+    if not alias:
+        return text, False
+    name = alias.group(1)
+    shim = ("\n/* Adapted from the ES module build so a classic <script> tag can "
+            "use it. */\nwindow.kaplay = %s;\nwindow.kaplay.default = %s;\n"
+            % (name, name))
+    out = text[:m.start()] + shim + text[m.end():]
+    out = re.sub(r"//# sourceMappingURL=\S*\s*$", "", out)
+    return out, True
+
+
 def fetch_kaplay():
     os.makedirs(GAME_DIR, exist_ok=True)
     target = os.path.join(GAME_DIR, "kaplay.js")
@@ -50,10 +83,24 @@ def fetch_kaplay():
         print("  that download doesn't look like kaplay; leaving the old file alone",
               file=sys.stderr)
         return None
-    with open(target, "wb") as fh:
-        fh.write(body)
-    print("  kaplay.js  %d KB" % (len(body) // 1024))
-    return len(body)
+
+    text = body.decode("utf-8")
+    text, adapted = adapt_if_module(text)
+    if adapted:
+        print("  got the ES module build; adapted it for a classic <script>")
+
+    if ESM_EXPORT.search(text):
+        print("  still contains an ES export — refusing to install a file that "
+              "would not load", file=sys.stderr)
+        return None
+    if "window.kaplay" not in text and not re.search(r"\bkaplay\s*=", text):
+        print("  warning: nothing in this file appears to define a kaplay global",
+              file=sys.stderr)
+
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print("  kaplay.js  %d KB" % (len(text.encode("utf-8")) // 1024))
+    return len(text)
 
 
 def copy_sprites(src_dir):

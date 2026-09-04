@@ -182,9 +182,19 @@ Until you run it, the **+ Game** project still opens and edits, but Download
 tells the student the library isn't installed rather than producing a zip that
 won't run.
 
-`static/game/kaplay.js` is already committed (3001.0.19, 188,533 bytes — the
-sha256 is recorded in `manifest.json`, so a later re-vendor can be checked
-against it). Re-run the script only when you want a newer version.
+`static/game/kaplay.js` is already committed (3001.0.19; the sha256 is recorded
+in `manifest.json`). Re-run the script only when you want a newer version.
+
+**Get the classic build, not the module one.** npm ships both:
+`dist/kaplay.js` defines a global, while `dist/kaplay.mjs` ends in
+`export{...}`, which is a syntax error in a classic `<script>`. The failure is
+unhelpful — the browser hides errors from cross-origin scripts, so you get a
+bare `Script error.` followed by `kaplay is not defined` pointing at the
+student's file rather than the real cause. `vendor.py` now detects the module
+build and adapts it, and refuses to install anything that still carries an ES
+export. The preview also loads the library with `crossorigin="anonymous"` so
+any future library error shows its real message, and says plainly when the
+library failed to define itself.
 
 ### How sprites reach the preview
 

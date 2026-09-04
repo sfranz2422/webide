@@ -89,7 +89,18 @@ window.WebIDERun = (function () {
       "  window.addEventListener('unhandledrejection', function (e) {",
       "    send('error', 'Uncaught (in promise) ' + show(e.reason));",
       "  });",
-      "  window.addEventListener('load', function () { send('ready', ''); });",
+      "  window.addEventListener('load', function () {",
+      "    // A game page whose library never defined itself would otherwise",
+      "    // only produce 'kaplay is not defined' from the student's own line,",
+      "    // which points at the wrong file entirely.",
+      "    var needsLib = !!document.querySelector('script[src*=\"" + GAME_LIB + "\"]');",
+      "    if (needsLib && typeof window.kaplay === 'undefined') {",
+      "      send('error', 'The game library did not load, so nothing below it ran.'",
+      "        + ' Check that " + GAME_LIB + " is installed on the server and is the'",
+      "        + ' classic build, not the ES module one.');",
+      "    }",
+      "    send('ready', '');",
+      "  });",
       "})();"
     ].join("\n");
   }
@@ -139,6 +150,19 @@ window.WebIDERun = (function () {
 
   function marker(name) { return "/*@webide:" + name + "*/"; }
 
+  /* The library is fetched cross-origin (the preview has a null origin), and
+     the browser hides the detail of any error a cross-origin script throws —
+     you get a bare "Script error." with no file or line, which is close to
+     useless. Adding crossorigin="anonymous" opts into the real message, and
+     works because /static/game/ is served with permissive CORS. */
+  function markLibraryScript(html) {
+    return html.replace(
+      new RegExp("<script\\b(?![^>]*\\bcrossorigin)([^>]*\\bsrc\\s*=\\s*[\"'][^\"']*" +
+                 GAME_LIB + "[\"'][^>]*)>", "gi"),
+      '<script crossorigin="anonymous"$1>'
+    );
+  }
+
   /* Where does each inlined file's line 1 sit in the assembled document?
      Returns { "script.js": offset } such that
      studentLine = documentLine - offset. */
@@ -171,6 +195,7 @@ window.WebIDERun = (function () {
       withBridge = head + "\n" + html;
     }
     var doc = inline(withBridge, files);
+    doc = markLibraryScript(doc);
     return { html: doc, offsets: lineOffsets(doc, files) };
   }
 
