@@ -38,6 +38,12 @@ ID_LENGTH = 7
 # The page the browser opens. Everything else is linked from it.
 ENTRY = "index.html"
 
+# Files the app itself provides to a game project. They are not part of the
+# student's project and are never editable, but they do get bundled into a
+# download so an unzipped game runs offline.
+GAME_LIB = "kaplay.js"
+GAME_ROOT = "static/game"
+
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
 
 # Every project starts as these three, already wired together, so nobody
@@ -86,6 +92,65 @@ button {
 button.addEventListener("click", function () {
   console.log("The button was clicked!");
   button.textContent = "You clicked me!";
+});
+""",
+}
+
+
+GAME_STARTER = {
+    "index.html": """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>My Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- kaplay.js is the game library. Leave this line alone. -->
+  <script src="kaplay.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
+""",
+    "style.css": """body {
+  margin: 0;
+  background: #1b2130;
+}
+
+canvas {
+  display: block;
+}
+""",
+    "script.js": """// Start the game engine
+kaplay({
+  width: 640,
+  height: 360,
+  background: [120, 190, 230],
+});
+
+// Load a picture to use. There are lots more in sprites/
+loadSprite("bean", "sprites/bean.png");
+
+// Put the bean on the screen
+const player = add([
+  sprite("bean"),
+  pos(320, 180),
+  anchor("center"),
+  area(),
+]);
+
+// Arrow keys move it around
+const SPEED = 240;
+
+onKeyDown("left",  () => player.move(-SPEED, 0));
+onKeyDown("right", () => player.move(SPEED, 0));
+onKeyDown("up",    () => player.move(0, -SPEED));
+onKeyDown("down",  () => player.move(0, SPEED));
+
+// Click it to say hello
+player.onClick(() => {
+  debug.log("You clicked the bean!");
 });
 """,
 }
@@ -191,6 +256,56 @@ def validate_files(raw):
 # --------------------------------------------------------------------------
 
 app = Flask(__name__)
+
+
+def sprite_manifest():
+    """Names and sizes of the bundled sprites, or [] if none are vendored."""
+    try:
+        with open(os.path.join(os.path.dirname(__file__),
+                               "static", "game", "manifest.json")) as fh:
+            return json.load(fh).get("sprites", [])
+    except Exception:
+        return []
+
+
+def game_installed() -> bool:
+    return os.path.exists(os.path.join(os.path.dirname(__file__),
+                                       "static", "game", GAME_LIB))
+
+
+@app.context_processor
+def game_context():
+    """Available to every template, so no render site can forget it."""
+    return {"sprites": sprite_manifest(), "game_installed": game_installed()}
+
+
+@app.after_request
+def allow_game_assets(response):
+    """Let the sandboxed preview use the bundled sprites.
+
+    The preview runs on a null origin, so every sprite request is
+    cross-origin. Kaplay loads images with crossOrigin="anonymous" (it has to,
+    or WebGL refuses to make a texture out of them), and that only works if the
+    server says so. Without this header a game runs but draws nothing.
+    """
+    if request.path.startswith("/static/game/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
+@app.get("/game")
+def new_game():
+    """A fresh game project, with the library already wired in."""
+    return render_template(
+        "index.html",
+        files=GAME_STARTER,
+        title="Untitled Game",
+        author="",
+        readonly=False,
+        authoring=True,
+        slug=None,
+        shared_at=None,
+    )
 
 
 @app.get("/")

@@ -16,6 +16,26 @@ window.WebIDERun = (function () {
   "use strict";
 
   var ENTRY = "index.html";
+  var GAME_LIB = "kaplay.js";
+  var GAME_ROOT = "/static/game/";      // kaplay.js and sprites/ live here
+
+  /* A game project is one whose page pulls in the library. Nothing else to
+     track: the boilerplate carries the tag, so what the student edits is
+     exactly what they get in a download. */
+  function isGame(files) {
+    var html = files[ENTRY] || "";
+    return new RegExp("<script[^>]*\\bsrc\\s*=\\s*[\"'][^\"']*" +
+                      GAME_LIB + "[\"']", "i").test(html);
+  }
+
+  /* The preview has no server behind it and a null origin, so a relative URL
+     has nothing to resolve against. A <base> pointing at this app fixes both
+     kaplay.js and every sprites/… path in one line, and — because it lives in
+     the assembled document rather than the student's file — the same markup
+     still resolves against the local folder once the project is unzipped. */
+  function baseTag() {
+    return '<base href="' + location.origin + GAME_ROOT + '">';
+  }
 
   /* Sent into the page ahead of the student's own code. Mirrors console output
      and errors back to the editor. Kept in its own <script> element so the
@@ -138,7 +158,9 @@ window.WebIDERun = (function () {
      thrown by the student's own scripts. */
   function assemble(files, token) {
     var html = files[ENTRY] || "";
-    var head = "<script>" + bridge(token) + "\n</script>";
+    // <base> must come before anything that uses a URL, so it goes in first
+    var head = (isGame(files) ? baseTag() + "\n" : "") +
+               "<script>" + bridge(token) + "\n</script>";
     var withBridge;
 
     if (/<head[^>]*>/i.test(html)) {
@@ -166,8 +188,31 @@ window.WebIDERun = (function () {
     return "";
   }
 
+  /* What a download needs beyond the student's own files, so the unzipped
+     folder runs with no internet: the library, plus every sprite. The whole
+     pack goes in rather than only the ones we can see referenced — a sprite
+     name built at runtime (a variable, a random pick, string concatenation)
+     is invisible to any scan, and a game that works in class but breaks at
+     home is the worst possible outcome. */
+  function extras(files) {
+    if (!isGame(files)) return [];
+    var list = [{ name: GAME_LIB, url: GAME_ROOT + GAME_LIB }];
+    var manifest = window.WEBIDE && window.WEBIDE.sprites;
+    (manifest || []).forEach(function (s) {
+      list.push({
+        name: "sprites/" + s.name + ".png",
+        url: GAME_ROOT + "sprites/" + s.name + ".png"
+      });
+    });
+    return list;
+  }
+
   return {
     ENTRY: ENTRY,
+    GAME_LIB: GAME_LIB,
+    GAME_ROOT: GAME_ROOT,
+    isGame: isGame,
+    extras: extras,
     assemble: assemble,
     inline: inline,
     locate: locate

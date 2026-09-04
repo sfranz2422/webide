@@ -35,6 +35,10 @@
 
 <header class="bar">
   <div class="brand"><span class="logo">🎨</span> WebIDE</div>
+  {% if not readonly %}
+    <a class="newgame" href="{{ url_for('new_game') }}"
+       title="Start a new project with the game library wired in">+ Game</a>
+  {% endif %}
 
   <div class="meta">
     <input id="title" class="field field-title" type="text"
@@ -147,9 +151,12 @@
     readonly: {{ 'true' if readonly else 'false' }},
     authoring: {{ 'true' if authoring else 'false' }},
     shareUrl: "{{ url_for('create_share') }}",
-    files: {{ files | tojson }}
+    files: {{ files | tojson }},
+    sprites: {{ sprites | tojson }},
+    gameInstalled: {{ 'true' if game_installed else 'false' }}
   };
 </script>
+<script src="{{ url_for('static', filename='zip.js') }}"></script>
 <script src="{{ url_for('static', filename='runner.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>

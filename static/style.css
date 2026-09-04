@@ -121,6 +121,19 @@ html, body {
 }
 .logo { margin-right: 4px; }
 
+.newgame {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.newgame:hover { color: var(--text); border-color: var(--hover-line); }
+
 .meta {
   display: flex;
   gap: 8px;

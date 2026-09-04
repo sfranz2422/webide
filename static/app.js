@@ -495,17 +495,57 @@
   });
 
   // -------------------------------------------------------------- download
-  $("download").addEventListener("click", function () {
-    var name = mdSourceOpen || !window.WebIDENotes.isMarkdown(active)
-      ? active : lastCodeFile;
-    var blob = new Blob([docs[name].getValue()], { type: "text/plain" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+  /* The whole project as a zip, so a student can unzip it, double-click
+     index.html and have it run with no internet. That works because the files
+     keep real relative links rather than being inlined — a game's
+     <script src="kaplay.js"> resolves against the folder just as it resolved
+     against this server in the preview. */
+  var downloadBtn = $("download");
+
+  function projectFileName() {
+    var base = ($("title").value || "project")
+      .replace(/[^\w -]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+    return (base || "project") + ".zip";
+  }
+
+  async function fetchBinary(url) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error(url.split("/").pop() + " (" + res.status + ")");
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  downloadBtn.addEventListener("click", async function () {
+    var files = allFiles();
+    var entries = Object.keys(files).sort().map(function (name) {
+      return { name: name, data: files[name] };
+    });
+
+    var extras = window.WebIDERun.extras(files);
+    if (extras.length && !window.WEBIDE.gameInstalled) {
+      write("\nThe game library isn't installed on the server, so the download" +
+            " would not run offline. Ask your teacher to run tools/vendor.py.\n",
+            "err");
+      return;
+    }
+
+    var original = downloadBtn.textContent;
+    downloadBtn.disabled = true;
+    if (extras.length) downloadBtn.textContent = "Zipping…";
+
+    try {
+      // fetched in parallel; these are same-origin so no CORS dance
+      var fetched = await Promise.all(extras.map(function (e) {
+        return fetchBinary(e.url).then(function (bytes) {
+          return { name: e.name, data: bytes };
+        });
+      }));
+      window.WebIDEZip.download(projectFileName(), entries.concat(fetched));
+    } catch (e) {
+      write("\nCould not build the download: " + e.message + "\n", "err");
+    } finally {
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = original;
+    }
   });
 
   // show something straight away rather than an empty white rectangle
