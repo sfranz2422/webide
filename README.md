@@ -77,9 +77,27 @@ python app.py       # http://localhost:5001
 
 ## How students use it
 
-**Write and run.** Edit any tab, press **Run** or `Ctrl+Enter`. The preview
-reloads and the console clears. `console.log` output appears in the console
-pane, and so do errors.
+**Write and run.** Edit any tab and the preview follows about three quarters of
+a second after you stop typing — no trip to the toolbar to see a colour change.
+**Run** and `Ctrl+Enter` still work, for restarting a page deliberately and for
+games. `console.log` output appears in the console pane, and so do errors.
+
+The **Auto** box beside Run controls it, and is remembered per browser.
+
+A pause rather than a keystroke, because re-rendering on every character would
+spend most of its time displaying half-typed tags and unfinished selectors.
+Three details that are easy to get wrong, all of them tested:
+
+- **Stop means stop.** Without that, the next keystroke would start the program
+  up again a moment later — worst of all for the runaway loop Stop exists to
+  deal with. Auto-refresh stays off until Run is pressed again.
+- **An edit that changes nothing doesn't reload**, so typing and undoing leaves
+  the preview alone.
+- **Games are the exception, and get their own remembered setting.** A reload
+  starts a game from its first frame, which is useful while tuning a jump
+  height and infuriating while playing level three, so Auto starts off for a
+  game and on for a page. A student who wants it while tuning numbers can turn
+  it on without changing what happens on their next ordinary page.
 
 **Errors point at their own file and line.** The three files get combined into
 one document to run, so the browser reports errors against that combined
@@ -113,7 +131,13 @@ avoids pulling in a deflate implementation for no gain.
 | `Esc` | Dismiss suggestions |
 
 Tags close themselves as they're typed, which removes a lot of week-one
-frustration.
+frustration — **on the line they were opened on**. The addon otherwise carries
+a list of "block" tags (`h1`–`h6`, `div`, `p`, `ul`, `table` and a dozen more)
+that it spreads across three lines with the cursor on a blank one in the
+middle. That is a reasonable habit for someone laying out a page section, and a
+bad surprise for a beginner typing `<h1>Hello</h1>` who watches their heading
+and its closing tag fly apart. Void tags are untouched: `<br>` and `<img>`
+still don't get a closing tag.
 
 ### Name completion
 

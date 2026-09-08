@@ -54,6 +54,11 @@
       <span class="btn-icon">▶</span><span id="run-label">Run</span>
     </button>
     <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    {% if not readonly %}
+      <label class="toggle">
+        <input type="checkbox" id="auto-run"> Auto
+      </label>
+    {% endif %}
     {% if readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}

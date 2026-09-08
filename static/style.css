@@ -164,6 +164,23 @@ html, body {
 
 .actions { display: flex; gap: 8px; }
 
+/* "Auto" — whether the preview follows the typing. Sits beside Run and reads
+   as a setting for it, rather than competing with it for attention. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.toggle:hover { color: var(--text); }
+.toggle[hidden] { display: none; }
+
 .btn {
   display: inline-flex;
   align-items: center;

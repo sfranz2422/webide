@@ -28,7 +28,15 @@
     indentWithTabs: false,
     matchBrackets: true,
     autoCloseBrackets: true,
-    autoCloseTags: true,
+    /* Close every tag on the line it was opened on.
+       The addon otherwise carries a list of "block" tags — h1 to h6, div, p,
+       ul, table and a dozen more — that it expands across three lines with the
+       cursor on a blank one in the middle. That is a reasonable habit for
+       someone writing a page section, and a bad surprise for a beginner typing
+       <h1>Hello</h1>, who watches their heading and its closing tag fly apart.
+       An empty list is still a list, so the addon uses it and indents nothing;
+       leaving dontCloseTags unset keeps <br> and <img> closing themselves. */
+    autoCloseTags: { indentTags: [] },
     readOnly: window.WEBIDE.readonly ? "nocursor" : false,
     extraKeys: {
       "Ctrl-Enter": function () { run(); },
@@ -366,6 +374,10 @@
     var built = window.WebIDERun.assemble(files, token);
     offsets = built.offsets;
 
+    lastRun = signature(files);
+    // Running again is how a student says "carry on" after a Stop.
+    autoPaused = false;
+
     setBusy(true);
     freshFrame().srcdoc = built.html;
     relayout();
@@ -375,11 +387,102 @@
     freshFrame();          // tears down timers, listeners, sound and any loop
     token = null;
     setBusy(false);
+    /* Stop has to mean stop. Without this the next keystroke would start the
+       program up again a moment later, which reads as a broken button —
+       especially for the runaway loop Stop exists to deal with. */
+    autoPaused = true;
     write("\n— stopped —\n", "dim");
   }
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stop);
+
+  // ---------------------------------------------------------- auto refresh
+  /* The preview follows the typing, so changing a colour doesn't need a trip
+     to the toolbar. Pressing Run stays useful — for games, and for restarting
+     a page on purpose — but nobody has to press it to see their own edit.
+     A pause rather than a keystroke: re-rendering on every character would
+     spend most of its time showing half-typed tags and unfinished selectors.
+     700ms is long enough for a tag to be finished and short enough to still
+     feel like a consequence of what was typed. */
+  var AUTO_DELAY = 700;
+  var autoTimer = null;
+  var autoPaused = false;   // set by Stop, cleared by Run
+  var lastRun = null;       // what was on screen last, so a no-op edit is free
+  var autoBox = $("auto-run");
+
+  function signature(files) {
+    return JSON.stringify(files);
+  }
+
+  /* A game and a page want opposite defaults, so the answer is remembered
+     under its own key for each. A game restarts from its first frame on every
+     reload, which is useful while tuning a jump height and infuriating while
+     playing level three — off to begin with, and a student tuning numbers can
+     turn it on without changing what happens on their next ordinary page. */
+  function autoKey() {
+    return window.WebIDERun.isGame(allFiles())
+      ? "webide-autorun-game" : "webide-autorun";
+  }
+
+  /* Held in memory as well as in storage. A browser with site data blocked
+     would otherwise revert the box on the next keystroke, because paintAuto
+     re-reads the answer and would find nothing saved. */
+  var autoChoice = {};
+
+  function autoWanted() {
+    var key = autoKey();
+    if (key in autoChoice) return autoChoice[key];
+    try {
+      var saved = localStorage.getItem(key);
+      if (saved === "on" || saved === "off") {
+        autoChoice[key] = saved === "on";
+        return autoChoice[key];
+      }
+    } catch (e) { /* storage blocked; fall through to the default */ }
+    return !window.WebIDERun.isGame(allFiles());
+  }
+
+  /* Called whenever the project might have become a game or stopped being
+     one, so the box always shows the answer for what is actually open. */
+  function paintAuto() {
+    if (!autoBox) return;
+    var isGame = window.WebIDERun.isGame(allFiles());
+    autoBox.checked = autoWanted();
+    autoBox.parentNode.title = isGame
+      ? "Reload the game when you stop typing. Off by default: a reload starts "
+        + "the game over."
+      : "Update the preview when you stop typing, without pressing Run.";
+  }
+
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    if (!autoBox || !autoBox.checked || autoPaused) return;
+    if (window.WEBIDE.readonly) return;
+    // editing the assignment notes changes nothing the preview shows
+    if (window.WebIDENotes.isMarkdown(active)) return;
+
+    autoTimer = setTimeout(function () {
+      if (!autoBox.checked || autoPaused) return;
+      var files = allFiles();
+      // typed and then undone, or a change in a file the page doesn't use
+      if (signature(files) === lastRun) return;
+      run();
+    }, AUTO_DELAY);
+  }
+
+  if (autoBox) {
+    paintAuto();
+    autoBox.addEventListener("change", function () {
+      var key = autoKey();
+      autoChoice[key] = autoBox.checked;
+      try {
+        localStorage.setItem(key, autoBox.checked ? "on" : "off");
+      } catch (e) { /* blocked; the choice lasts for this page only */ }
+      if (autoBox.checked) scheduleAuto();
+      else clearTimeout(autoTimer);
+    });
+  }
 
   window.addEventListener("message", function (e) {
     var data = e.data;
@@ -506,7 +609,13 @@
     if (!isGame && !spritePanel.hidden) closeSprites();
   }
 
-  editor.on("change", function () { refreshSpriteButton(); });
+  /* Both of these follow the same fact — whether the project is a game — so
+     they are answered together, on the one event that can change it. */
+  editor.on("change", function () {
+    refreshSpriteButton();
+    paintAuto();
+    scheduleAuto();
+  });
   refreshSpriteButton();
 
   // ----------------------------------------------------------------- share
