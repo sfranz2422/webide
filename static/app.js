@@ -290,7 +290,13 @@
      they were given on day one, and the stylesheet link is the thing most
      often forgotten on a second page, so the new page looks unstyled and the
      student concludes their CSS is broken. The link home comes with it,
-     because that is the whole point of adding a second page. */
+     because that is the whole point of adding a second page.
+
+     No <script src="script.js"> though, deliberately. Shared JavaScript
+     usually reaches for elements that only exist on the page it was written
+     for — the starter script.js grabs #cheer, which lives on index.html — so
+     including it here would greet every new page with a null reference on
+     line 3. The comment says how to add it for anyone who wants it. */
   function starterFor(name) {
     if (!/\.html?$/i.test(name)) return "";
     var title = name.replace(/\.html?$/i, "").replace(/[-_]+/g, " ").trim();
@@ -306,7 +312,8 @@
       '  <h1>' + title + '</h1>\n' +
       '  <p><a href="' + ENTRY + '">Back to home</a></p>\n' +
       '\n' +
-      '  <script src="script.js"></' + 'script>\n' +
+      '  <!-- This page has no JavaScript yet. To give it some, add:\n' +
+      '       <script src="script.js"><' + '/script> -->\n' +
       '</body>\n' +
       '</html>\n';
   }
