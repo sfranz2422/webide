@@ -3,9 +3,10 @@
 A browser-based HTML/CSS/JS editor for a web design class, with shareable
 project links. Companion to PyIDE — same shape, same habits, different language.
 
-Every project is three files, already wired together: `index.html`,
+Every project starts as three files, already wired together: `index.html`,
 `style.css`, `script.js`. Press Run and the page appears in the preview pane
-with a console underneath.
+with a console underneath. **+ File** adds more pages, so a project can be a
+whole site rather than one page.
 
 ---
 
@@ -83,6 +84,73 @@ a second after you stop typing — no trip to the toolbar to see a colour change
 games. `console.log` output appears in the console pane, and so do errors.
 
 The **Auto** box beside Run controls it, and is remembered per browser.
+
+## Multi-page sites
+
+**+ File** and a name ending in `.html` adds a page. It arrives as a real page
+— doctype, head, the stylesheet already linked and a link back home — because a
+blank file is a poor place for a beginner to land, and a second page that
+forgot `<link rel="stylesheet">` looks like broken CSS rather than a missing
+line.
+
+Links between pages work in the preview. Clicking `<a href="about.html">`
+shows About, a **Back** bar appears above the preview, and **Run** always
+returns to `index.html` — so there is one rule to remember rather than a
+history to keep track of. Auto-refresh is the opposite: it re-renders whatever
+page is showing, so editing About updates About.
+
+`<a href="#section">` still jumps within the page, as it should. A link to
+another *site* is stopped with a note in the console rather than followed —
+otherwise it would replace the student's work with someone else's page and the
+only way back would be Run.
+
+### Forms
+
+Forms work as far as they can without a server:
+
+- **`e.preventDefault()` in a submit handler works** — the ordinary way forms
+  are taught. It didn't before: the preview was missing the `allow-forms`
+  sandbox permission, so the submit event never fired at all and a correct
+  handler silently did nothing. That was a real bug, found while building this.
+- **A form nobody has written JavaScript for still does something.** The
+  submitted fields are printed to the console, name by name, which is the part
+  of a form worth looking at anyway.
+- **`action="thanks.html"` moves to that page**, and the values arrive there as
+  `window.formData` — `formData.hero` and so on.
+
+`formData` is a stand-in, and worth being honest with students about: a real
+server hands the values over in the query string, but a sandboxed preview has
+no address to put one in. `history.replaceState` throws on an opaque origin, so
+`location.search` can never be anything but empty here. It's a reasonable
+bridge to the Web 2 class, where the same form posts to Flask for real.
+
+Nothing is ever actually submitted anywhere. Every submission is caught in the
+preview, so `allow-forms` grants the event, not the network.
+
+<details>
+<summary>Why the preview needs all this instead of just letting links work</summary>
+
+The preview is a `srcdoc` document with no address of its own, so it borrows
+the editor's URL as its base. Measured in Chrome:
+
+```
+document.baseURI              -> https://your-app.onrender.com/
+<a href="about.html"> becomes -> https://your-app.onrender.com/about.html
+click                         -> the frame navigated away
+```
+
+A student clicking their own nav link got this app's 404 and lost their page
+until they pressed Run. So links and form actions are caught by the bridge
+script already injected for the console, and handed to the editor, which
+rebuilds the preview around the requested file. `assemble()` takes the entry
+page as an argument; everything else — inlining that page's own `<link>` and
+`<script>`, mapping error lines back — works the same for any page.
+
+The one thing this can't catch is `window.location = "page.html"` set from
+JavaScript. Links and form submissions are interceptable; assigning to
+`location` isn't.
+
+</details>
 
 A pause rather than a keystroke, because re-rendering on every character would
 spend most of its time displaying half-typed tags and unfinished selectors.

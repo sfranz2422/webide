@@ -164,6 +164,27 @@ html, body {
 
 .actions { display: flex; gap: 8px; }
 
+/* Where the preview currently is, once it has left the home page. Reads as a
+   thin address bar rather than a toolbar, because it describes the preview
+   below it and not the project. */
+.trail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.trail[hidden] { display: none; }
+.trail-page code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.trail .linkbtn:disabled { opacity: .4; cursor: default; }
+
 /* "Auto" — whether the preview follows the typing. Sits beside Run and reads
    as a setting for it, rather than competing with it for attention. */
 .toggle {

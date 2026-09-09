@@ -40,10 +40,17 @@ window.WebIDERun = (function () {
   /* Sent into the page ahead of the student's own code. Mirrors console output
      and errors back to the editor. Kept in its own <script> element so the
      student's line numbers still start at 1 in their own file. */
-  function bridge(token) {
+  function bridge(token, pages, sent) {
     return [
       "(function () {",
       "  var TOKEN = " + JSON.stringify(token) + ";",
+      "  var PAGES = " + JSON.stringify(pages || []) + ";",
+      /* What a form on the previous page submitted. A real server would hand
+         this over in the query string, but a sandboxed preview has no address
+         to put one in — history.replaceState throws on an opaque origin, so
+         location.search can never be anything but empty. This is the stand-in:
+         a plain object, empty when nobody submitted anything. */
+      "  window.formData = " + JSON.stringify(sent || {}) + ";",
       "  function send(kind, text, where) {",
       "    try {",
       "      parent.postMessage({ webide: TOKEN, kind: kind, text: text,",
@@ -89,6 +96,66 @@ window.WebIDERun = (function () {
       "  window.addEventListener('unhandledrejection', function (e) {",
       "    send('error', 'Uncaught (in promise) ' + show(e.reason));",
       "  });",
+      /* ---- moving between the student's pages ----------------------------
+         The preview is a srcdoc document with no address of its own, so it
+         borrows the editor's URL as its base: <a href='about.html'> resolves
+         against this app and clicking it would navigate the preview to a 404,
+         taking the student's page with it. Measured, not assumed.
+
+         So links are caught here and handed to the editor, which rebuilds the
+         preview around that file. An in-page #anchor is left alone — that is
+         real behaviour a student should see working. */
+      "  function pageNamed(url) {",
+      "    var name = String(url).split(/[?#]/)[0].split('/').pop();",
+      "    for (var i = 0; i < PAGES.length; i++) {",
+      "      if (PAGES[i].toLowerCase() === name.toLowerCase()) return PAGES[i];",
+      "    }",
+      "    return null;",
+      "  }",
+      "  document.addEventListener('click', function (e) {",
+      "    var a = e.target && e.target.closest && e.target.closest('a[href]');",
+      "    if (!a || e.defaultPrevented || e.button) return;",
+      "    var raw = a.getAttribute('href') || '';",
+      "    if (raw.charAt(0) === '#' || !raw) return;      // same-page anchor",
+      "    var page = pageNamed(a.href);",
+      "    if (page) {",
+      "      e.preventDefault();",
+      "      send('nav', page);",
+      "      return;",
+      "    }",
+      "    // Anything else — another site, mailto: — would replace the preview",
+      "    // with something that isn't the student's work, so it is stopped and",
+      "    // explained rather than allowed to happen.",
+      "    e.preventDefault();",
+      "    send('note', 'That link points outside your project, so the preview "
+      + "did not follow it: ' + raw);",
+      "  });",
+      "",
+      /* ---- forms ----------------------------------------------------------
+         allow-forms is on, so the submit event fires and a student's own
+         preventDefault handler works — the usual way forms are taught. This
+         listener is on the document and therefore runs after theirs: if they
+         already handled it, nothing happens here. Otherwise the submission is
+         stopped (there is no server to post to) and reported, so a form that
+         nobody has written JavaScript for still visibly does something. */
+      "  document.addEventListener('submit', function (e) {",
+      "    if (e.defaultPrevented) return;              // their handler won",
+      "    var form = e.target;",
+      "    e.preventDefault();",
+      "    var fields = [];",
+      "    try {",
+      "      new FormData(form).forEach(function (value, key) {",
+      "        fields.push([key, typeof value === 'string' ? value : '(file)']);",
+      "      });",
+      "    } catch (err) {}",
+      "    var action = form.getAttribute('action') || '';",
+      "    try {",
+      "      parent.postMessage({ webide: TOKEN, kind: 'form', text: '',",
+      "        fields: fields, action: pageNamed(action) || '',",
+      "        method: (form.getAttribute('method') || 'get').toLowerCase() }, '*');",
+      "    } catch (err) {}",
+      "  });",
+      "",
       "  window.addEventListener('load', function () {",
       "    // A game page whose library never defined itself would otherwise",
       "    // only produce 'kaplay is not defined' from the student's own line,",
@@ -178,13 +245,25 @@ window.WebIDERun = (function () {
     return offsets;
   }
 
+  /* Every .html file in the project — the set a link is allowed to reach. */
+  function pages(files) {
+    return Object.keys(files).filter(function (n) {
+      return /\.html?$/i.test(n);
+    }).sort();
+  }
+
   /* Build the complete document. The bridge goes first so it captures errors
-     thrown by the student's own scripts. */
-  function assemble(files, token) {
-    var html = files[ENTRY] || "";
+     thrown by the student's own scripts.
+
+     `entry` is which of the student's pages to show — index.html unless a link
+     or a form has moved the preview somewhere else. `sent` is what a form on
+     the previous page submitted, if anything. */
+  function assemble(files, token, entry, sent) {
+    var start = entry && files[entry] !== undefined ? entry : ENTRY;
+    var html = files[start] || "";
     // <base> must come before anything that uses a URL, so it goes in first
     var head = (isGame(files) ? baseTag() + "\n" : "") +
-               "<script>" + bridge(token) + "\n</script>";
+               "<script>" + bridge(token, pages(files), sent) + "\n</script>";
     var withBridge;
 
     if (/<head[^>]*>/i.test(html)) {
@@ -237,6 +316,7 @@ window.WebIDERun = (function () {
     GAME_LIB: GAME_LIB,
     GAME_ROOT: GAME_ROOT,
     isGame: isGame,
+    pages: pages,
     extras: extras,
     assemble: assemble,
     inline: inline,

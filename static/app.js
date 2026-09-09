@@ -285,6 +285,32 @@
     relayout();
   }
 
+  /* A new page starts as a real page rather than an empty file. A blank .html
+     is a poor place for a beginner to land — they need the doctype and head
+     they were given on day one, and the stylesheet link is the thing most
+     often forgotten on a second page, so the new page looks unstyled and the
+     student concludes their CSS is broken. The link home comes with it,
+     because that is the whole point of adding a second page. */
+  function starterFor(name) {
+    if (!/\.html?$/i.test(name)) return "";
+    var title = name.replace(/\.html?$/i, "").replace(/[-_]+/g, " ").trim();
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+    return '<!DOCTYPE html>\n' +
+      '<html lang="en">\n' +
+      '<head>\n' +
+      '  <meta charset="utf-8">\n' +
+      '  <title>' + title + '</title>\n' +
+      '  <link rel="stylesheet" href="style.css">\n' +
+      '</head>\n' +
+      '<body>\n' +
+      '  <h1>' + title + '</h1>\n' +
+      '  <p><a href="' + ENTRY + '">Back to home</a></p>\n' +
+      '\n' +
+      '  <script src="script.js"></' + 'script>\n' +
+      '</body>\n' +
+      '</html>\n';
+  }
+
   var newFileBtn = $("new-file");
   if (newFileBtn) {
     newFileBtn.addEventListener("click", function () {
@@ -298,7 +324,7 @@
         return;
       }
       if (docs[name]) { switchTo(name); return; }
-      addFile(name, "");
+      addFile(name, starterFor(name));
       switchTo(name);
     });
   }
@@ -338,6 +364,9 @@
   var token = null;        // identifies messages from the current preview
   var offsets = {};        // maps document lines back to the student's files
   var running = false;
+  var backBar = $("preview-trail");
+  var backBtn = $("preview-back");
+  var pageLabel = $("preview-page");
 
   function setBusy(state) {
     running = state;
@@ -355,23 +384,34 @@
     var next = document.createElement("iframe");
     next.id = "preview";
     next.title = "Page preview";
-    next.setAttribute("sandbox", "allow-scripts");
+    next.setAttribute("sandbox", "allow-scripts allow-forms");
     old.parentNode.replaceChild(next, old);
     frame = next;
     return next;
   }
 
-  function run() {
+  /* Which of the student's pages the preview is showing, and how it got
+     there. A project is usually one page and this stays empty; a site with a
+     nav bar walks through it. */
+  var page = ENTRY;
+  var trail = [];
+
+  /* Render one page. `sent` carries what a form on the previous page
+     submitted, so the page it lands on can say something about it. */
+  function render(name, sent) {
     var files = allFiles();
     if (!files[ENTRY]) {
       write("\nThere's no " + ENTRY + " to open.\n", "err");
       return;
     }
+    if (files[name] === undefined) name = ENTRY;
+    page = name;
+
     showPreview();
     clearOutput();
 
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
-    var built = window.WebIDERun.assemble(files, token);
+    var built = window.WebIDERun.assemble(files, token, page, sent);
     offsets = built.offsets;
 
     lastRun = signature(files);
@@ -380,7 +420,37 @@
 
     setBusy(true);
     freshFrame().srcdoc = built.html;
+    paintTrail();
     relayout();
+  }
+
+  /* Run always goes home. A student who has clicked three pages deep and
+     wants a clean start shouldn't have to find their way back first — and
+     "Run shows me my homepage" is one less rule to remember. Auto-refresh is
+     the opposite: it updates whatever is on screen, because being thrown back
+     to the homepage every time you edit your About page would be unusable. */
+  function run() {
+    trail = [];
+    render(ENTRY);
+  }
+
+  /* Follow a link or a form's action to another of the student's pages. */
+  function goToPage(name, sent) {
+    if (name !== page) trail.push(page);
+    render(name, sent);
+  }
+
+  function goBack() {
+    if (!trail.length) return;
+    render(trail.pop());
+  }
+
+  function paintTrail() {
+    if (!backBar) return;
+    var away = page !== ENTRY || trail.length > 0;
+    backBar.hidden = !away;
+    if (away) pageLabel.textContent = page;
+    backBtn.disabled = trail.length === 0;
   }
 
   function stop() {
@@ -396,6 +466,38 @@
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stop);
+  if (backBtn) backBtn.addEventListener("click", goBack);
+
+  /* What the preview reports when a form is submitted and the student hasn't
+     written a handler for it. There is no server to post to, so the next best
+     thing is showing them exactly what their form produced — which is the
+     part of a form that's worth looking at anyway. */
+  function reportForm(data) {
+    var fields = data.fields || [];
+    var sent = {};
+    fields.forEach(function (pair) { sent[pair[0]] = pair[1]; });
+
+    /* Move first, then report: rendering a page clears the console, so a
+       summary written before the navigation would be wiped by it. */
+    if (data.action) goToPage(data.action, sent);
+
+    if (!fields.length) {
+      write("\nForm submitted, but no field had a name attribute — that is "
+            + "what a form sends, so give each input a name and the values "
+            + "will show up here.\n", "dim");
+    } else {
+      write("\nForm submitted (" + (data.method || "get") + "):\n", "dim");
+      fields.forEach(function (pair) {
+        write("   " + pair[0] + " = " + pair[1] + "\n");
+      });
+    }
+
+    if (!data.action) {
+      write("It didn't go anywhere: sending a form somewhere real needs a "
+            + "server. Point the form's action at another page in this "
+            + "project to move there.\n", "dim");
+    }
+  }
 
   // ---------------------------------------------------------- auto refresh
   /* The preview follows the typing, so changing a colour doesn't need a trip
@@ -467,7 +569,9 @@
       var files = allFiles();
       // typed and then undone, or a change in a file the page doesn't use
       if (signature(files) === lastRun) return;
-      run();
+      /* render, not run: a student editing about.html should see about.html
+         update, not be thrown back to the homepage on every pause. */
+      render(page);
     }, AUTO_DELAY);
   }
 
@@ -497,6 +601,22 @@
       }
       return;
     }
+
+    /* A link to another of the student's pages. The preview can't navigate
+       there itself — it has no address — so it asks, and we rebuild. */
+    if (data.kind === "nav") {
+      goToPage(String(data.text));
+      return;
+    }
+    if (data.kind === "form") {
+      reportForm(data);
+      return;
+    }
+    if (data.kind === "note") {
+      write(String(data.text) + "\n", "dim");
+      return;
+    }
+
     var where = window.WebIDERun.locate(data.file, data.line, offsets);
     var cls = data.kind === "error" ? "err" : (data.kind === "warn" ? "warn" : "");
     write(String(data.text) + (where ? "   (" + where + ")" : "") + "\n", cls);

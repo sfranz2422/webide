@@ -101,10 +101,19 @@
         <span>Preview</span>
         <span class="hint">Ctrl+Enter to run</span>
       </div>
+      <!-- Only appears once a link or a form has moved the preview off the
+           home page, so a one-page project never sees it. -->
+      <div id="preview-trail" class="trail" hidden>
+        <button id="preview-back" class="linkbtn">◀ Back</button>
+        <span class="trail-page">showing <code id="preview-page">index.html</code></span>
+      </div>
       <div class="preview-frame">
         <!-- allow-scripts WITHOUT allow-same-origin: student JavaScript runs
-             normally but on a null origin, so it cannot touch this page -->
-        <iframe id="preview" title="Page preview" sandbox="allow-scripts"></iframe>
+             normally but on a null origin, so it cannot touch this page.
+             allow-forms only lets the submit event fire — every submission is
+             caught by the bridge, so nothing is ever actually posted. -->
+        <iframe id="preview" title="Page preview"
+                sandbox="allow-scripts allow-forms"></iframe>
       </div>
       <div class="pane-head console-head">
         <span>Console</span>
