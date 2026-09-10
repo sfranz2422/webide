@@ -202,6 +202,23 @@
     window.WebIDENotes.render(notesBody, docs[name].getValue());
   }
 
+  /* Which file the editor is actually editing.
+     Deliberately different from `active`: selecting a .md tab makes it active
+     but leaves the editor on the last code file, because notes render on the
+     right rather than opening to be edited. So anything asking "what am I
+     typing into?" has to ask this instead of `active`.
+
+     That gap is worth a name because it has caused the same bug twice. A fork
+     of a shared project opens on its notes tab, so `active` is the .md from
+     the first moment — and every check written against `active` silently
+     switched itself off for exactly the students following an assignment. */
+  function editingFile() {
+    if (window.WebIDENotes.isMarkdown(active)) {
+      return mdSourceOpen ? active : lastCodeFile;
+    }
+    return active;
+  }
+
   /* docs[] holds the Doc objects themselves and swapDoc doesn't change their
      identity, so there is nothing to write back when switching away. */
   function showEditorDoc(name) {
@@ -568,8 +585,11 @@
     clearTimeout(autoTimer);
     if (!autoBox || !autoBox.checked || autoPaused) return;
     if (window.WEBIDE.readonly) return;
-    // editing the assignment notes changes nothing the preview shows
-    if (window.WebIDENotes.isMarkdown(active)) return;
+    /* Editing the assignment notes changes nothing the preview shows — but
+       ask what the editor holds, not which tab is lit. A fork opens on its
+       notes tab while the editor is on index.html, and asking `active` here
+       meant auto-refresh never fired for anyone working from an assignment. */
+    if (window.WebIDENotes.isMarkdown(editingFile())) return;
 
     autoTimer = setTimeout(function () {
       if (!autoBox.checked || autoPaused) return;
@@ -640,18 +660,24 @@
   var hintTimer = null;
   editor.on("change", function (cm, change) {
     if (window.WEBIDE.readonly) return;
-    if (window.WebIDENotes.isMarkdown(active) && !mdSourceOpen) return;
 
+    // markdown open for editing: keep the rendered notes in step, suggest
+    // nothing — prose has no names to complete
     if (mdSourceOpen && window.WebIDENotes.isMarkdown(active)) {
       window.WebIDENotes.render(notesBody, docs[active].getValue());
       return;
     }
+
+    // the file being typed into, which is not the lit tab when notes are shown
+    var file = editingFile();
+    if (window.WebIDENotes.isMarkdown(file)) return;
+
     var typed = change.origin === "+input" && change.text.join("");
     if (typed && /^[A-Za-z0-9_-]$/.test(typed)) {
       clearTimeout(hintTimer);
       hintTimer = setTimeout(function () {
         if (!cm.state.completionActive) {
-          window.WebIDEComplete.show(cm, active, allFiles());
+          window.WebIDEComplete.show(cm, file, allFiles());
         }
       }, 140);
     }
@@ -699,9 +725,12 @@
      the path have to agree. Dropped into script.js wherever the caret is. */
   function insertLoadSprite(name) {
     if (window.WEBIDE.readonly) return;
-    var target = /\.m?js$/i.test(active) ? active : "script.js";
-    if (!docs[target]) target = active;
-    if (active !== target) switchTo(target);
+    // the file being typed into, not the lit tab — a student reading the notes
+    // shouldn't have them closed just because they clicked a sprite
+    var here = editingFile();
+    var target = /\.m?js$/i.test(here) ? here : "script.js";
+    if (!docs[target]) target = here;
+    if (here !== target) switchTo(target);
     editor.replaceSelection(
       'loadSprite("' + name + '", "sprites/' + name + '.png");\n', "end");
     editor.focus();

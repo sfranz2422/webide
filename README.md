@@ -181,6 +181,25 @@ Three details that are easy to get wrong, all of them tested:
   height and infuriating while playing level three, so Auto starts off for a
   game and on for a page. A student who wants it while tuning numbers can turn
   it on without changing what happens on their next ordinary page.
+- **Editing the notes doesn't reload the preview**, but *reading* them doesn't
+  stop it either. Those are different states and conflating them was a bug —
+  see below.
+
+### The lit tab is not the file being edited
+
+Worth knowing, because it has caused the same bug three times across both
+IDEs. Selecting a `.md` tab makes it active but leaves the editor on the last
+code file, since notes render on the right rather than opening to be edited.
+A fork of a shared assignment *opens* on its notes tab, so from the very first
+moment the active tab is the markdown while the student types into
+`index.html`.
+
+Any check written against the active tab therefore switched itself off for
+exactly the students following an assignment — auto-refresh never fired, and
+name completion never appeared, until they happened to click a code tab. The
+fix is a single `editingFile()` helper that answers "what am I typing into?",
+and every such check asks that instead. Same helper, same name, in both
+editors.
 
 **Errors point at their own file and line.** The three files get combined into
 one document to run, so the browser reports errors against that combined
