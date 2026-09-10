@@ -99,10 +99,25 @@ returns to `index.html` — so there is one rule to remember rather than a
 history to keep track of. Auto-refresh is the opposite: it re-renders whatever
 page is showing, so editing About updates About.
 
-`<a href="#section">` still jumps within the page, as it should. A link to
-another *site* is stopped with a note in the console rather than followed —
-otherwise it would replace the student's work with someone else's page and the
-only way back would be Run.
+`<a href="#section">` jumps within the page, as it should. A link to another
+*site* is stopped with a note in the console rather than followed — otherwise
+it would replace the student's work with someone else's page and the only way
+back would be Run.
+
+Every `href` a student can write is intercepted, including the ones that look
+like they need no help. An in-page anchor especially: the preview comes from
+`srcdoc` and has **no URL of its own**, so `#contact` is not same-page to it.
+Left to the browser it resolves against `document.baseURI` — the editor's own
+address — and the frame navigates to WebIDE and renders the whole IDE inside
+its own preview pane. Measured, from the bug report that found it:
+
+```
+<a href="#contact">  unprevented ->  https://webide-…/s/ynfkun6#contact
+```
+
+So anchors scroll the preview by hand, `href="#"` goes to the top, an anchor
+with no matching id says so in the console, and an empty `href` is stopped
+rather than reloading the IDE into itself.
 
 ### Forms
 

@@ -116,7 +116,37 @@ window.WebIDERun = (function () {
       "    var a = e.target && e.target.closest && e.target.closest('a[href]');",
       "    if (!a || e.defaultPrevented || e.button) return;",
       "    var raw = a.getAttribute('href') || '';",
-      "    if (raw.charAt(0) === '#' || !raw) return;      // same-page anchor",
+      /* An in-page anchor has to be handled here rather than left to the
+         browser. This document came from srcdoc and has no URL of its own, so
+         '#contact' is not same-page to it: it resolves against baseURI, which
+         is the editor's address, and the frame cheerfully navigates to the IDE
+         and renders it inside its own preview. Same for an empty href. */
+      "    if (raw.charAt(0) === '#') {",
+      "      e.preventDefault();",
+      "      var id = raw.slice(1);",
+      "      if (!id || id.toLowerCase() === 'top') {",
+      "        window.scrollTo(0, 0);",
+      "        return;",
+      "      }",
+      "      var target = null;",
+      "      try {",
+      "        target = document.getElementById(id) ||",
+      "                 document.getElementsByName(id)[0] || null;",
+      "      } catch (err) {}",
+      "      if (target && target.scrollIntoView) {",
+      "        target.scrollIntoView({ block: 'start' });",
+      "      } else {",
+      "        send('note', 'Nothing on this page has id=\"' + id + '\", so the'",
+      "          + ' link had nowhere to jump to.');",
+      "      }",
+      "      return;",
+      "    }",
+      "    if (!raw) {",
+      "      e.preventDefault();",
+      "      send('note', 'That link has an empty href, so it has no"
+      + " destination yet.');",
+      "      return;",
+      "    }",
       "    var page = pageNamed(a.href);",
       "    if (page) {",
       "      e.preventDefault();",
