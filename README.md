@@ -100,9 +100,22 @@ history to keep track of. Auto-refresh is the opposite: it re-renders whatever
 page is showing, so editing About updates About.
 
 `<a href="#section">` jumps within the page, as it should. A link to another
-*site* is stopped with a note in the console rather than followed — otherwise
-it would replace the student's work with someone else's page and the only way
-back would be Run.
+*site* **opens in a new browser tab**, with a line in the console saying so. It
+is never followed inside the preview, which would replace the student's work
+with someone else's page and leave Run as the only way back.
+
+The preview can't open that tab itself: its sandbox has no `allow-popups`, and
+granting that would let any student script spawn tabs. So it asks the editor,
+which opens it. The click that started it gives the editor transient
+activation, which is what stops the browser treating the tab as an unprompted
+pop-up — and if a pop-up blocker stops it anyway, the console says so and shows
+the address to copy.
+
+Only `http` and `https` are opened, and the editor re-checks that rather than
+trusting what the frame sent, since the URL came from student content. A
+`mailto:`, `javascript:` or `data:` href is reported in the console and goes
+nowhere. Whatever opens gets its `window.opener` severed, so the other site
+can't reach back into the editor.
 
 Every `href` a student can write is intercepted, including the ones that look
 like they need no help. An in-page anchor especially: the preview comes from

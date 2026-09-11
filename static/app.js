@@ -492,6 +492,35 @@
   stopBtn.addEventListener("click", stop);
   if (backBtn) backBtn.addEventListener("click", goBack);
 
+  /* A link to another site, opened on the preview's behalf.
+     The preview can't do this itself — no allow-popups in its sandbox, on
+     purpose — so it asks, and the tab is opened from here. The click that
+     started it also gives this window transient activation, which is what
+     keeps the browser from treating the new tab as an unprompted pop-up.
+
+     The URL arrives from student content, so it is checked again here rather
+     than trusted: only http and https, whatever the frame claimed to send. */
+  function openExternal(url) {
+    if (!/^https?:\/\//i.test(url)) {
+      write("\nThat link didn't point at a web address, so nothing opened: "
+            + url + "\n", "dim");
+      return;
+    }
+    var opened = null;
+    try {
+      opened = window.open(url, "_blank");
+      // the opened page must not be able to reach back into the editor
+      if (opened) { try { opened.opener = null; } catch (e) {} }
+    } catch (e) { /* blocked; handled below */ }
+
+    if (opened) {
+      write("\nOpened in a new tab: " + url + "\n", "dim");
+    } else {
+      write("\nYour browser blocked a new tab for " + url +
+            "\nAllow pop-ups for this site, or copy the address above.\n", "dim");
+    }
+  }
+
   /* What the preview reports when a form is submitted and the student hasn't
      written a handler for it. There is no server to post to, so the next best
      thing is showing them exactly what their form produced — which is the
@@ -637,6 +666,10 @@
     }
     if (data.kind === "form") {
       reportForm(data);
+      return;
+    }
+    if (data.kind === "open") {
+      openExternal(String(data.text));
       return;
     }
     if (data.kind === "note") {

@@ -153,12 +153,19 @@ window.WebIDERun = (function () {
       "      send('nav', page);",
       "      return;",
       "    }",
-      "    // Anything else — another site, mailto: — would replace the preview",
-      "    // with something that isn't the student's work, so it is stopped and",
-      "    // explained rather than allowed to happen.",
+      /* Another site. Never followed *here* — that would replace the student's
+         work with someone else's page — but a link to MDN in an assignment
+         should still go somewhere, so it is handed to the editor to open in a
+         new tab. This frame can't do that itself: its sandbox has no
+         allow-popups, and granting that would let any student script spawn
+         tabs. Only http(s) is passed on; a javascript: or data: href is
+         reported and goes nowhere. */
       "    e.preventDefault();",
-      "    send('note', 'That link points outside your project, so the preview "
-      + "did not follow it: ' + raw);",
+      "    if (a.protocol === 'http:' || a.protocol === 'https:') {",
+      "      send('open', a.href);",
+      "    } else {",
+      "      send('note', 'The preview did not follow that link: ' + raw);",
+      "    }",
       "  });",
       "",
       /* ---- forms ----------------------------------------------------------
