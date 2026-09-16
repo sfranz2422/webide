@@ -155,6 +155,7 @@
   // ----------------------------------------------------------------- files
   var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
 
+  var account = null;      // assigned further down, once the editor exists
   var docs = {};
   var active = ENTRY;
   var lastCodeFile = ENTRY;
@@ -286,6 +287,8 @@
   function addFile(name, text) {
     docs[name] = CodeMirror.Doc(text || "", modeFor(name));
     renderTabs();
+    // adding a file is a change, but fires no editor change event
+    if (account) account.noteEdit();
   }
 
   function removeFile(name) {
@@ -300,6 +303,7 @@
     delete docs[name];
     renderTabs();
     relayout();
+    if (account) account.noteEdit();
   }
 
   /* A new page starts as a real page rather than an empty file. A blank .html
@@ -807,8 +811,44 @@
   });
   refreshSpriteButton();
 
+  // ----------------------------------------------------- saving and turn-in
+  /* Dormant unless somebody is signed in and this is a saved project. */
+  account = window.WebIDEAccount.attach({
+    read: function () {
+      return { files: allFiles(), title: $("title").value };
+    },
+    say: write
+  });
+
+  editor.on("change", function () { account.noteEdit(); });
+
+  $("close-projects").addEventListener("click", function () {
+    $("projects-modal").hidden = true;
+  });
+  $("projects-modal").addEventListener("click", function (e) {
+    if (e.target === $("projects-modal")) $("projects-modal").hidden = true;
+  });
+
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
+  var hideCode = $("hide-code");   // teachers only; absent for everyone else
+
+  /* Two kinds of link come out of one button, so the dialog has to say which
+     one it just produced — an accidental tick is otherwise invisible until a
+     student opens the link and finds no code. */
+  function describeShare(hidden) {
+    $("modal-title").textContent = hidden ? "Demo link ready" : "Project shared";
+    $("modal-sub").textContent = hidden
+      ? "This link shows the finished page. The source is not on it."
+      : "Anyone with this link can open and run this snapshot.";
+    $("modal-note").textContent = hidden
+      ? "Nobody can read, fork or download the source from this link — "
+        + "including you, so keep your own copy. Recovering it would take the "
+        + "browser's developer tools, which is a fair barrier for a class but "
+        + "not a lock."
+      : "The link captures every file exactly as it is right now. "
+        + "If you keep working, share again to create an updated link.";
+  }
 
   function flagAuthor(message) {
     authorField.classList.add("field-bad");
@@ -840,7 +880,8 @@
           body: JSON.stringify({
             title: $("title").value,
             author: authorField.value,
-            files: allFiles()
+            files: allFiles(),
+            hidden: !!(hideCode && hideCode.checked)
           })
         });
         var data = await res.json();
@@ -848,6 +889,9 @@
           if (data.field === "author") { flagAuthor(data.error); return; }
           throw new Error(data.error || "Could not share this project.");
         }
+        // the server decides, not the checkbox — they agree, but only one of
+        // them knows what actually got written
+        describeShare(!!data.hidden);
         $("share-url").value = data.url;
         $("modal").hidden = false;
         $("share-url").select();
@@ -880,7 +924,9 @@
      keep real relative links rather than being inlined — a game's
      <script src="kaplay.js"> resolves against the folder just as it resolved
      against this server in the preview. */
-  var downloadBtn = $("download");
+  /* Download sits in the toolbar for a signed-out student and in the account
+     menu for a signed-in one, so take whichever is actually on the page. */
+  var downloadBtn = $("download") || $("download-menu");
 
   function projectFileName() {
     var base = ($("title").value || "project")
@@ -894,7 +940,7 @@
     return new Uint8Array(await res.arrayBuffer());
   }
 
-  downloadBtn.addEventListener("click", async function () {
+  if (downloadBtn) downloadBtn.addEventListener("click", async function () {
     var files = allFiles();
     var entries = Object.keys(files).sort().map(function (name) {
       return { name: name, data: files[name] };

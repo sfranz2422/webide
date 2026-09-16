@@ -37,6 +37,81 @@ than asking the stuck frame to navigate itself.
 
 ---
 
+## Accounts, saved work and turning in
+
+Identical to PyIDE — same tables, same rules, same buttons in the same places,
+deliberately, so a student who has used one already knows this one. The short
+version is here; PyIDE's README carries the long form of the same decisions.
+
+Signing in is **optional and additive**. With no Google credentials set, the
+site is exactly what it was: open a link, write HTML, press Run, share it. No
+sign-in button renders and every link handed out before today still works. That
+is verified as its own test, because "the new feature quietly broke the old
+one" is the failure that matters most here.
+
+Signed in, three things appear:
+
+**Work saves itself.** A signed-in student's project autosaves shortly after
+they stop typing, and again on the way out. `Saved 9:42 AM` sits in the
+toolbar and goes red if a save fails.
+
+**Assignments.** Get a project how you want the class to find it and press
+**Publish** — the same workflow as sharing, one button along. A student opening
+the link gets *their own copy*, found by who they are rather than by the link,
+so losing the link stops mattering. **Edit** on the dashboard reopens the
+assignment with your notes unlocked; saving changes what students get from then
+on and leaves anyone already working untouched. A student who isn't signed in
+can still open the link and do the work — they just can't save or turn in, and
+a banner says so.
+
+**Turning in** freezes the work as an ordinary share snapshot. Turning in again
+replaces it. `/teacher` lists assignments with counts; each one shows who
+turned in, when, how many attempts, what they submitted, and who has started
+but not handed in.
+
+### Setting up Google sign-in
+
+Same four variables as PyIDE, all in `render.yaml`: `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `TEACHER_EMAILS`, and `ALLOWED_EMAIL_DOMAINS` — which
+should **not exist at all** unless you are deliberately restricting sign-in to
+one domain. A placeholder left in there refuses every real address, yours
+included, and the only symptom is a refusal at the sign-in screen. The app
+prints what it is enforcing on every boot:
+
+```
+[webide] Google sign-in: ON — any Google account (ALLOWED_EMAIL_DOMAINS is empty)
+[webide] teachers: sfranz@mohawk.k12.pa.us
+```
+
+The OAuth client needs `https://your-webide.onrender.com/auth/callback` as an
+authorised redirect URI. It can be **the same Google Cloud project** as PyIDE
+with a second redirect URI added, or its own client — either works.
+
+Two things carried over: teachers come from an environment variable, so no code
+path can make someone a teacher; and identity hangs off Google's `sub` rather
+than the email, so a renamed mailbox keeps its work.
+
+### The toolbar a student actually sees
+
+Every route into the editor was checked against one rule — **nobody lands in
+the editor with no way to hand work in**:
+
+| how they got here | buttons |
+|---|---|
+| signed out, any project | Run, Share, Download |
+| student, your assignment link | Run, Turn in, Download (account menu) |
+| student, own saved project | Run, Share, Download |
+| student, new project | Run, Save, Share, Download |
+| teacher, new project | Run, Save, Share, Publish, Download |
+| teacher, editing an assignment | Run, Save, Share, Update assignment |
+
+A student on your assignment gets **Turn in** and not Share, because a share
+link isn't how work is handed in and the bar is read every lesson. Everyone
+else keeps Share, including signed-out students — that was a regression in
+PyIDE caught by this same matrix and fixed in both.
+
+---
+
 ## Deploying to Render
 
 This shares PyIDE's existing Postgres rather than provisioning a second one, so
@@ -47,10 +122,17 @@ there's no extra database charge.
 2. **New → Blueprint**, point it at the repo.
 3. Render will ask for `DATABASE_URL`. Paste PyIDE's database **Internal
    Connection String** (Render dashboard → the Postgres instance → Connect).
+4. For sign-in, add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+   `TEACHER_EMAILS`. Leave `ALLOWED_EMAIL_DOMAINS` unset. `SECRET_KEY` Render
+   generates for you — don't paste PyIDE's, the two apps sign their own
+   cookies.
 
-### Why sharing the database is safe
+Without those, the site deploys and runs exactly as before; sign-in simply
+doesn't appear.
 
-The two apps never touch the same objects:
+### What the two apps share, and what they don't
+
+Share links stay entirely separate:
 
 | | PyIDE | WebIDE |
 |---|---|---|
@@ -59,9 +141,26 @@ The two apps never touch the same objects:
 | sequence | `snippets_id_seq` | `projects_id_seq` |
 
 Each app's `create_all()` only creates its own table and each only ever queries
-its own, so the two can't collide — even an identical share slug in both tables
-is harmless, because they're separate namespaces reached through different
-hostnames. This was verified by running both apps against one database.
+its own, so an identical share slug in both is harmless — separate namespaces
+reached through different hostnames.
+
+**The account tables are shared on purpose.** `users`, `assignments`, `drafts`
+and `submissions` are one set of tables, defined once in `accounts.py` — a
+byte-identical file in both folders — so a student signs in once per app but is
+*the same person*, keyed on the same Google `sub`, with one place to look for
+their work.
+
+Keeping them apart where it matters is a column, not a table: `assignments.app`
+and `drafts.app` are `"pyide"` or `"webide"`, and every query filters on it.
+A Python project can't appear in the web editor's **My projects** list, can't
+be opened at WebIDE's `/p/<slug>`, and vice versa. That is tested directly —
+both apps run against one database and each is checked for the other's
+projects.
+
+The practical reason: WebIDE's files live in a JSON column and PyIDE's code
+lives in a text column, so opening one in the other would not merely look odd,
+it would fail. A filter is cheaper and clearer than two parallel sets of
+identical tables.
 
 Don't put this on the free tier. Free Postgres is **deleted 30 days after
 creation** (14-day grace period) and takes every share link with it. Nothing in
@@ -296,6 +395,59 @@ Notes are rendered with marked and sanitized with DOMPurify — `<script>`,
 `examples/01_profile_card/` is a complete worked assignment: the three files
 plus notes.
 
+### Students can't copy out of the notes
+
+A student reading your notes can't select the text in them, so the answer in a
+worked example has to be typed rather than dragged into `index.html`. `Ctrl+A`
+skips the notes entirely — verified, not assumed, because "select all then
+copy" is the obvious way round and a protection that only stops dragging isn't
+one.
+
+Three deliberate holes in it:
+
+- **Links stay selectable**, so a URL in the notes can still be copied. That is
+  a reasonable thing to want and no part of the exercise.
+- **The notes are yours wherever they're yours.** A new project at `/`, your
+  own saved project, and a teacher editing an assignment all leave the text
+  selectable — the lock is on *someone else's* assignment, not on markdown.
+- **It is a cupboard, not a safe.** View-source and the devtools are right
+  there. Aimed at the copy-paste reflex, not at a determined student, and worth
+  saying out loud rather than implying more than it does.
+
+---
+
+## Demo links — showing the page without showing the code
+
+Tick **Hide code** before sharing and the link opens a `/d/…` page instead of
+the editor: the finished site, a Run button, a console, and nothing else. No
+tabs, no source, no **Edit a copy**, no download. Same feature as PyIDE, same
+checkbox, same honesty about its limits.
+
+Useful for showing a class what they're building before they build it, and for
+a link that goes home without going home with the answer.
+
+How it holds up:
+
+- The source is **never written into the demo page**. It is fetched only when
+  Run is pressed, from `/d/<slug>/source`, and kept in a closure — not on
+  `window`, not in an editor, not in the markup. Reading the page gets you
+  nothing.
+- Pressing Run twice fetches once, so a second run adds nothing to the network
+  log.
+- `/s/<slug>`, `/s/<slug>/fork` and `/s/<slug>/raw` all **refuse** a hidden
+  project rather than quietly serving it — the editor routes are the obvious
+  way round and closing the front door while leaving the side one open would be
+  worse than not bothering.
+- The source response is sent `no-store`.
+
+**A network panel still shows the request.** That is the difference between a
+cupboard and a safe, and the cupboard is what a classroom needs. Anything
+stronger would mean not sending the code to the browser at all, which is not
+possible for a page whose whole job is to run there.
+
+Multi-page sites, forms, links and external links all work on a demo page
+exactly as in the preview — it shares `runner.js` with the editor.
+
 ---
 
 ## Game mode (Kaplay)
@@ -397,14 +549,21 @@ Done: written directly in `static/zip.js`, no library.
 ## Files
 
 ```
-app.py                  Flask app: pages, share API, database
+app.py                  Flask app: pages, share API, accounts, database
+accounts.py             Shared tables — identical file in pyide/
 tools/vendor.py         Fetches Kaplay and the sprite pack into static/game/
 render.yaml             Render blueprint (web service; reuses PyIDE's database)
 templates/
   index.html            The editor page
+  demo.html             A "hide code" link: Run, the page, a console
+  teacher.html          Dashboard: your assignments and their counts
+  teacher_assignment.html   Who turned in, when, and what
+  signin_problem.html   Why a sign-in was refused, in plain words
   404.html              Bad share link
 static/
   app.js                Editor, tabs, run/stop, sharing
+  account.js            Sign-in UI, autosave, publish, turn in
+  demo.js               The demo page (never holds the source in the document)
   runner.js             Document assembly, sandbox bridge, error mapping
   complete.js           Name completion (Acorn for JS, DOM for markup)
   notes.js              Markdown notes: render, sanitize

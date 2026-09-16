@@ -658,6 +658,191 @@ li.CodeMirror-hint-active { background: var(--accent); color: var(--on-accent); 
   .output { height: 35vh; }
 }
 
+/* ------------------------------------------------------------- demo page */
+/* What a "hide code" link opens. There is no editor pane to place beside the
+   preview, because there is no editor on that page at all — not hidden, not
+   read-only, absent — so the preview takes the full width. */
+.demo-main {
+  display: flex;
+  height: calc(100% - var(--bar-h));
+  min-height: 0;
+}
+.demo-main .pane-right { flex: 1 1 100%; }
+
+/* ------------------------------------------------- signing in and saving */
+
+/* Whether the work is safe. Quiet when it is, because it almost always is —
+   the only state worth noticing is the one that says it isn't. */
+.savestate {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 0 4px;
+  min-width: 68px;
+  text-align: right;
+}
+.savestate.busy { opacity: .7; }
+.savestate.bad { color: var(--red); font-weight: 600; }
+
+.account { position: relative; }
+.btn-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 170px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow);
+  padding: 5px;
+  z-index: 60;
+}
+.menu[hidden] { display: none; }
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.menu-item:hover { background: var(--bg); }
+
+.banner-hint { background: var(--bg-panel); }
+
+.projects { max-height: 340px; overflow-y: auto; margin: 4px 0 18px; }
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-bottom: 6px;
+}
+.project-row:hover { border-color: var(--accent); }
+.project-open {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 12px;
+  text-decoration: none;
+  color: var(--text);
+  min-width: 0;
+}
+.project-name { font-weight: 500; }
+.project-when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* Quiet until you go looking for it, so nobody deletes a project on the way
+   to opening one. */
+.project-x {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  padding: 6px 12px 8px;
+  cursor: pointer;
+  opacity: .35;
+  border-radius: 6px;
+}
+.project-row:hover .project-x { opacity: 1; }
+.project-x:hover { color: var(--red); background: var(--bg); }
+
+.rowactions { white-space: nowrap; }
+.rowactions .linkbtn { margin-left: 12px; }
+.linkbtn.danger { color: var(--red); }
+
+/* ------------------------------------------------------ teacher's pages */
+.sheet {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+  overflow-y: auto;
+  height: calc(100% - var(--bar-h));
+}
+.sheet h2 {
+  font-size: 15px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 30px 0 12px;
+}
+.sheet .count {
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.pagetitle { font-weight: 600; }
+.whoami { align-self: center; color: var(--muted); font-size: 12.5px; }
+.brandlink { color: inherit; text-decoration: none; }
+
+.listing { width: 100%; border-collapse: collapse; font-size: 14px; }
+.listing th {
+  text-align: left;
+  font-size: 11.5px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.listing td { padding: 12px 10px; border-bottom: 1px solid var(--line); }
+.listing tr:hover td { background: var(--bg-panel); }
+.listing a { color: var(--accent); text-decoration: none; }
+.listing a:hover { text-decoration: underline; }
+.listing .right { text-align: right; }
+.small { font-size: 12px; }
+
+.handout { border: 1px solid var(--line); border-radius: 9px; padding: 16px 18px; }
+.handout h2 { margin-top: 0; }
+.names { columns: 2; margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty h2 { text-transform: none; font-size: 20px; color: var(--text); }
+
+
+/* Assignment notes can't be selected, so the code in them can't be copied
+   into the editor. Typing it out is most of the exercise.
+
+   Done by preventing selection rather than by policing paste: a paste filter
+   would have to guess where text came from, and would block a student who
+   typed the starter code correctly and then copied their own line. This has
+   no such failure — it removes the shortcut without ever getting in the way
+   of someone doing the work.
+
+   It is a speed bump, not a lock. Developer tools will still show the text.
+   That is the same bargain as a demo link, and it stops the ordinary path.
+
+   Not while authoring: the notes are yours at "/" and on your own projects,
+   and you may well want to copy a line out of them. Every view a student sees
+   — an assignment, a share, a fork — is covered. */
+body:not(.is-authoring) .notes-body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Links stay usable: clicking one still works, and its text is the one thing
+   worth being able to lift out of the notes. */
+body:not(.is-authoring) .notes-body a {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* -------------------------------------------------------------- 404 page */
 .center {
   height: 100%;

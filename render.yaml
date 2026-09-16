@@ -1,10 +1,15 @@
 # WebIDE shares PyIDE's existing Postgres instead of provisioning a second one.
 #
-# The two apps never touch the same objects: PyIDE owns the `snippets` table
-# (and ix_snippets_slug, snippets_id_seq), WebIDE owns `projects` (and
+# Share links stay separate: PyIDE owns the `snippets` table (and
+# ix_snippets_slug, snippets_id_seq), WebIDE owns `projects` (and
 # ix_projects_slug, projects_id_seq). Each app's create_all() only creates its
-# own table, and each only ever queries its own, so even an identical share
-# slug in both tables is harmless.
+# own, and each only ever queries its own, so even an identical share slug in
+# both tables is harmless.
+#
+# The account tables (users, assignments, drafts, submissions) ARE shared, on
+# purpose — accounts.py is an identical file in both apps, so one sign-in is
+# one person across both editors. An `app` column on assignments and drafts
+# keeps each editor's projects out of the other's lists.
 #
 # There is no `databases:` block on purpose. DATABASE_URL is marked
 # sync: false, so Render asks for it at deploy time — paste PyIDE's database
@@ -23,4 +28,29 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.6"
       - key: DATABASE_URL
+        sync: false
+
+      # Signs the session cookie. Render generates one; never set this by hand
+      # and never change it casually — changing it signs everyone out.
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Google sign-in, shared with PyIDE: one account covers both editors.
+      # Leave these unset and the site runs exactly as it did before accounts
+      # existed — no sign-in button, no saving, no dashboard.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # Who may sign in. Comma separated, no @. LEAVE IT OUT ENTIRELY to allow
+      # any Google account — do not paste an example domain in here, or every
+      # real address is refused.
+      - key: ALLOWED_EMAIL_DOMAINS
+        sync: false
+
+      # Who gets the dashboard and the Publish button. Comma separated full
+      # addresses, matched exactly. Kept here rather than in the database so
+      # nobody can promote themselves by finding a hole in the app.
+      - key: TEACHER_EMAILS
         sync: false
