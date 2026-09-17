@@ -84,8 +84,24 @@ prints what it is enforcing on every boot:
 ```
 
 The OAuth client needs `https://your-webide.onrender.com/auth/callback` as an
-authorised redirect URI. It can be **the same Google Cloud project** as PyIDE
-with a second redirect URI added, or its own client — either works.
+authorised redirect URI. It can be **the same OAuth client** as PyIDE with a
+second redirect URI added, or its own client — either works. If you reuse
+PyIDE's client, remember that WebIDE is a different hostname: PyIDE's callback
+being registered does nothing for it.
+
+Getting this wrong gives `Error 400: redirect_uri_mismatch` at sign-in, for
+every account including your own personal Gmail — it is checked before Google
+looks at who you are, so it is never a district-approval problem even though it
+looks like one. Google's error page doesn't say which URI it objected to, so
+the app logs the exact string it sent on the first sign-in attempt after each
+deploy:
+
+```
+[webide] redirect URI sent to Google: https://webide-xyz.onrender.com/auth/callback
+```
+
+Copy that into **APIs & Services → Credentials → your client → Authorized
+redirect URIs**, character for character.
 
 Two things carried over: teachers come from an environment variable, so no code
 path can make someone a teacher; and identity hangs off Google's `sub` rather

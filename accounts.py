@@ -190,9 +190,17 @@ def _as_map(raw) -> dict:
 LATER_COLUMNS = [
     ("assignments", "archived",
      "ALTER TABLE assignments ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"),
-    # Everything that existed before two editors shared this table was PyIDE's.
+    # Everything that existed before two editors shared these tables was
+    # PyIDE's, so 'pyide' is the only default that makes an existing row true.
+    # BOTH tables need this. Leaving `assignments` out was a real bug: the
+    # column is in the model, so every query selects it, and on a database
+    # whose `assignments` table predates the column that is an immediate
+    # UndefinedColumn on the dashboard, the assignment link and turning in.
     ("drafts", "app",
      "ALTER TABLE drafts ADD COLUMN app VARCHAR(16) NOT NULL DEFAULT 'pyide'"),
+    ("assignments", "app",
+     "ALTER TABLE assignments ADD COLUMN app VARCHAR(16) NOT NULL "
+     "DEFAULT 'pyide'"),
 ]
 
 

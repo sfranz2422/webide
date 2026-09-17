@@ -566,16 +566,25 @@ def _scheme():
     return "https" if os.environ.get("DATABASE_URL") else "http"
 
 
+_redirect_logged = [False]
+
+
 @app.get("/login")
 def login():
     if not oauth:
         abort(404)
     nxt = request.args.get("next", "")
     session["after_login"] = nxt if nxt.startswith("/") else ""
+    target = url_for("auth_callback", _external=True, _scheme=_scheme())
+    # Printed once per worker. Google's redirect_uri_mismatch page never says
+    # which URI it objected to, and guessing the host is how an afternoon
+    # disappears — so the exact string to paste into the Cloud Console's
+    # "Authorized redirect URIs" is in the logs after the first sign-in try.
+    if not _redirect_logged[0]:
+        _redirect_logged[0] = True
+        print(f"[{APP_NAME}] redirect URI sent to Google: {target}", flush=True)
     try:
-        return oauth.google.authorize_redirect(
-            url_for("auth_callback", _external=True, _scheme=_scheme())
-        )
+        return oauth.google.authorize_redirect(target)
     except Exception:
         # Authlib fetches Google's discovery document on the first sign-in of
         # each worker, so a network blip lands here. A student should see a

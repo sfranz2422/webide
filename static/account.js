@@ -315,7 +315,17 @@ window.WebIDEAccount = (function () {
 
       var when = document.createElement("span");
       when.className = "project-when";
-      when.textContent = (p.assignment ? p.assignment + " · " : "") + p.updated
+      /* A teacher who opens their own assignment link gets a student-style
+         copy of it, which lands here beside the project they published it
+         from — same title, same day, two rows. Saying which is which is the
+         whole difference between a list and a puzzle. */
+      var from = "";
+      if (p.assignment) {
+        from = (p.assignment === (p.title || "Untitled"))
+             ? "your copy of this assignment"
+             : "from \u201c" + p.assignment + "\u201d";
+      }
+      when.textContent = (from ? from + " · " : "") + p.updated
                        + (p.submitted ? " · turned in" : "");
       open.appendChild(when);
       row.appendChild(open);
