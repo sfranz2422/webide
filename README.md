@@ -64,6 +64,14 @@ on and leaves anyone already working untouched. A student who isn't signed in
 can still open the link and do the work — they just can't save or turn in, and
 a banner says so.
 
+**You clicking your own handout link** opens the assignment to edit, not a copy
+of it. That was not true at first: the author got a student's draft of their own
+work, which looked like a duplicate project, counted them among the students who
+had started, and — worst — accepted edits that reached nobody, because students
+read the assignment and not somebody's draft of it. None of it announced itself;
+the URL just changed from `/a/` to `/p/` and the page looked right. Add
+`?preview=1` to the link to see the student's view on purpose.
+
 **Turning in** freezes the work as an ordinary share snapshot. Turning in again
 replaces it. `/teacher` lists assignments with counts; each one shows who
 turned in, when, how many attempts, what they submitted, and who has started

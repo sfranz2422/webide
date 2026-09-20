@@ -887,6 +887,18 @@ def open_assignment(slug):
             abort(404)
 
         user = current_user(db)
+
+        # The author clicking their own handout link. Without this they get a
+        # student's copy of their own assignment: it sits in their project list
+        # looking like a duplicate, it counts them among the students who have
+        # started, and — worst — editing it changes nothing for the class,
+        # because a draft is a copy. So the author lands on the editable
+        # assignment instead, which is what they almost always wanted.
+        # `?preview=1` still gives the student's view, on purpose.
+        if (user is not None and user.id == item.teacher_id
+                and request.args.get("preview") != "1"):
+            return redirect(url_for("edit_assignment", slug=item.slug))
+
         if user is None:
             ctx = user_context(db)
             ctx.update(
@@ -942,7 +954,13 @@ def edit_assignment(slug):
         if item is None or item.teacher_id != user.id:
             abort(404)
 
-        started = db.query(accounts.Draft).filter_by(assignment_id=item.id).count()
+        # Not the author's own draft, if one is lying about from before the
+        # redirect in open_assignment existed — that is not a student who
+        # started.
+        started = (db.query(accounts.Draft)
+                     .filter(accounts.Draft.assignment_id == item.id,
+                             accounts.Draft.owner_id != item.teacher_id)
+                     .count())
         ctx = user_context(db)
         ctx.update(
             files=item.file_map(),
@@ -990,7 +1008,13 @@ def update_assignment(slug):
         item.title = clean(data.get("title"), 200) or item.title
         item.files = json.dumps(files)
         db.commit()
-        started = db.query(accounts.Draft).filter_by(assignment_id=item.id).count()
+        # Not the author's own draft, if one is lying about from before the
+        # redirect in open_assignment existed — that is not a student who
+        # started.
+        started = (db.query(accounts.Draft)
+                     .filter(accounts.Draft.assignment_id == item.id,
+                             accounts.Draft.owner_id != item.teacher_id)
+                     .count())
         return jsonify(ok=True, title=item.title, already_started=started)
     finally:
         db.close()
@@ -1179,7 +1203,8 @@ def teacher_assignment(slug):
         started = (db.query(accounts.User)
                      .join(accounts.Draft,
                            accounts.Draft.owner_id == accounts.User.id)
-                     .filter(accounts.Draft.assignment_id == item.id).all())
+                     .filter(accounts.Draft.assignment_id == item.id,
+                             accounts.Draft.owner_id != item.teacher_id).all())
         done = {s["email"] for s in handed_in}
         not_yet = sorted({u.email: u.display_name() for u in started
                           if u.email not in done}.values())
