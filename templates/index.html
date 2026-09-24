@@ -35,11 +35,6 @@
 
 <header class="bar">
   <div class="brand"><span class="logo">🎨</span> WebIDE</div>
-  {% if not readonly %}
-    <a class="newgame" href="{{ url_for('new_game') }}"
-       title="Start a new project with the game library wired in">+ Game</a>
-  {% endif %}
-
   <div class="meta">
     <input id="title" class="field field-title" type="text"
            value="{{ title }}" placeholder="Project name" maxlength="120"
@@ -106,7 +101,6 @@
                 title="Hand this out to a class as an assignment.">Publish</button>
       {% endif %}
     {% endif %}
-    <button id="sprites-toggle" class="btn" aria-expanded="false" hidden>Sprites</button>
     {# Signed in, Download lives in the account menu — still one click, but not
        taking up room in a bar a student reads every lesson. #}
     {% if not user %}
@@ -209,22 +203,6 @@
       <div id="notes-body" class="notes-body prose"></div>
     </div>
   </section>
-
-  <aside id="sprites" class="pane pane-sprites" hidden>
-    <div class="pane-head">
-      <span>Sprites</span>
-      <button id="sprites-close" class="linkbtn">Close</button>
-    </div>
-    <div class="sprite-tools">
-      <input id="sprite-search" class="field" type="search" placeholder="Search sprites">
-    </div>
-    <div class="sprite-scroll">
-      <div id="sprite-grid" class="sprite-grid"></div>
-      <p id="sprite-empty" class="dim sprite-empty" hidden>No sprite by that name.</p>
-    </div>
-    <p class="sprite-foot">Click a sprite to add its <code>loadSprite</code> line.
-      Then draw it with <code>sprite("name")</code>.</p>
-  </aside>
 </main>
 
 <div id="modal" class="modal" hidden>
@@ -268,8 +246,6 @@
     authoring: {{ 'true' if authoring else 'false' }},
     shareUrl: "{{ url_for('create_share') }}",
     files: {{ files | tojson }},
-    sprites: {{ sprites | tojson }},
-    gameInstalled: {{ 'true' if game_installed else 'false' }},
     signedIn: {{ 'true' if user else 'false' }},
     isTeacher: {{ 'true' if is_teacher else 'false' }},
     draftSlug: {{ (draft_slug or '') | tojson }},

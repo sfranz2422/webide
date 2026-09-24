@@ -203,8 +203,8 @@ python app.py       # http://localhost:5001
 
 **Write and run.** Edit any tab and the preview follows about three quarters of
 a second after you stop typing — no trip to the toolbar to see a colour change.
-**Run** and `Ctrl+Enter` still work, for restarting a page deliberately and for
-games. `console.log` output appears in the console pane, and so do errors.
+**Run** and `Ctrl+Enter` still work, for restarting a page deliberately.
+`console.log` output appears in the console pane, and so do errors.
 
 The **Auto** box beside Run controls it, and is remembered per browser.
 
@@ -312,11 +312,6 @@ Three details that are easy to get wrong, all of them tested:
   deal with. Auto-refresh stays off until Run is pressed again.
 - **An edit that changes nothing doesn't reload**, so typing and undoing leaves
   the preview alone.
-- **Games are the exception, and get their own remembered setting.** A reload
-  starts a game from its first frame, which is useful while tuning a jump
-  height and infuriating while playing level three, so Auto starts off for a
-  game and on for a page. A student who wants it while tuning numbers can turn
-  it on without changing what happens on their next ordinary page.
 - **Editing the notes doesn't reload the preview**, but *reading* them doesn't
   stop it either. Those are different states and conflating them was a bug —
   see below.
@@ -349,8 +344,7 @@ forks it. A name is required, enforced on the server too.
 
 **Download** gives the whole project as a zip. Unzip it, double-click
 `index.html`, and it runs with no internet — that works because the files keep
-real relative links rather than being inlined. A game download also contains
-`kaplay.js` and the sprite folder, so it runs offline too.
+real relative links rather than being inlined.
 
 The zip is written by about eighty lines in `static/zip.js` rather than a
 library. A zip is just each file's bytes with a header in front and a directory
@@ -474,97 +468,19 @@ exactly as in the preview — it shares `runner.js` with the editor.
 
 ---
 
-## Game mode (Kaplay)
-
-**+ Game** in the toolbar starts a project with the library already wired in.
-There's no mode switch to remember: a project is a game when its `index.html`
-pulls in `kaplay.js`, and the boilerplate carries that tag from the start. What
-a student edits is exactly what they get in a download.
-
-### Installing the library
-
-Kaplay is **vendored**, not loaded from a CDN — a school network can block a CDN
-without warning, and a link handed in during October should still run in May
-even if the library ships a breaking change. Run this once:
-
-```bash
-python tools/vendor.py --sprites "path/to/Kaplay sprites"
-```
-
-It downloads Kaplay (pinned to 3001.0.19), copies the sprites, slices `dino`
-into its nine frames, and writes `static/game/CREDITS.md` with the MIT notice.
-Until you run it, the **+ Game** project still opens and edits, but Download
-tells the student the library isn't installed rather than producing a zip that
-won't run.
-
-`static/game/kaplay.js` is already committed (3001.0.19; the sha256 is recorded
-in `manifest.json`). Re-run the script only when you want a newer version.
-
-**Get the classic build, not the module one.** npm ships both:
-`dist/kaplay.js` defines a global, while `dist/kaplay.mjs` ends in
-`export{...}`, which is a syntax error in a classic `<script>`. The failure is
-unhelpful — the browser hides errors from cross-origin scripts, so you get a
-bare `Script error.` followed by `kaplay is not defined` pointing at the
-student's file rather than the real cause. `vendor.py` now detects the module
-build and adapts it, and refuses to install anything that still carries an ES
-export. The preview also loads the library with `crossorigin="anonymous"` so
-any future library error shows its real message, and says plainly when the
-library failed to define itself.
-
-### The sprite panel
-
-**Sprites** in the toolbar opens a searchable grid of all 60 bundled images
-with their names and pixel sizes — the same panel as the Python editor. The
-button only appears once a project is a game, and disappears again if the
-library tag is removed.
-
-Clicking a sprite inserts the line students actually mistype:
-
-```js
-loadSprite("bean", "sprites/bean.png");
-```
-
-The name and the path have to agree, and getting one of them wrong is the
-commonest reason a sprite silently doesn't appear. The insert goes into
-`script.js` (or whichever `.js` tab is open), not into the HTML.
-
-### How sprites reach the preview
-
-Two details that are easy to get wrong, both settled by testing rather than
-assumption:
-
-- The preview has a **null origin**, so a relative URL has nothing to resolve
-  against. The assembled document gets a `<base href>` pointing at this app,
-  which fixes `kaplay.js` and every `sprites/…` path in one line — and because
-  it lives in the assembled document rather than the student's file, the same
-  markup still resolves against the local folder once unzipped.
-- Kaplay is a **WebGL** renderer and loads images with
-  `crossOrigin="anonymous"` (it has to — WebGL refuses to build a texture from
-  a cross-origin image otherwise). That only works if the server agrees, so
-  `/static/game/` is served with `Access-Control-Allow-Origin: *`. Without that
-  header a game runs and draws nothing, with a `SecurityError` at texture
-  upload.
-
 ### Still to do
 
 CodeMirror, Acorn, marked and DOMPurify still come from cdnjs, so a blocked
-domain doesn't just break games — it stops the editor loading at all. Vendoring
-those four is an afternoon and would leave the app depending on nothing but its
-own Render instance.
+domain stops the editor loading at all. Vendoring those four is an afternoon
+and would leave the app depending on nothing but its own Render instance.
 
 ### Notes on the download
 
 Decided:
 
-- **Game mode's boilerplate carries the `<script src="kaplay.js">` tag from the
-  start.** The zip never rewrites anyone's markup, so what a student edits is
+- **The zip never rewrites anyone's markup**, so what a student edits is
   exactly what they get in the download — no surprises when they open it at
   home and the file doesn't match what was on screen.
-- **Ship the whole sprite pack in the zip.** It's ~300 KB, and scanning for
-  `loadSprite("name")` would quietly miss any sprite chosen at runtime — a
-  variable, a random pick from a list, a name built by string concatenation.
-  Better a slightly bigger zip than a game that runs in class and breaks at
-  home.
 
 Done: written directly in `static/zip.js`, no library.
 
@@ -575,7 +491,6 @@ Done: written directly in `static/zip.js`, no library.
 ```
 app.py                  Flask app: pages, share API, accounts, database
 accounts.py             Shared tables — identical file in pyide/
-tools/vendor.py         Fetches Kaplay and the sprite pack into static/game/
 render.yaml             Render blueprint (web service; reuses PyIDE's database)
 templates/
   index.html            The editor page
@@ -593,6 +508,5 @@ static/
   notes.js              Markdown notes: render, sanitize
   zip.js                Dependency-free ZIP writer
   style.css             All styling
-  game/                 Vendored Kaplay + sprites (run tools/vendor.py)
 examples/               A worked assignment with notes
 ```

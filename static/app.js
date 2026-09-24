@@ -558,8 +558,8 @@
 
   // ---------------------------------------------------------- auto refresh
   /* The preview follows the typing, so changing a colour doesn't need a trip
-     to the toolbar. Pressing Run stays useful — for games, and for restarting
-     a page on purpose — but nobody has to press it to see their own edit.
+     to the toolbar. Pressing Run stays useful — for restarting a page on
+     purpose — but nobody has to press it to see their own edit.
      A pause rather than a keystroke: re-rendering on every character would
      spend most of its time showing half-typed tags and unfinished selectors.
      700ms is long enough for a tag to be finished and short enough to still
@@ -574,14 +574,8 @@
     return JSON.stringify(files);
   }
 
-  /* A game and a page want opposite defaults, so the answer is remembered
-     under its own key for each. A game restarts from its first frame on every
-     reload, which is useful while tuning a jump height and infuriating while
-     playing level three — off to begin with, and a student tuning numbers can
-     turn it on without changing what happens on their next ordinary page. */
   function autoKey() {
-    return window.WebIDERun.isGame(allFiles())
-      ? "webide-autorun-game" : "webide-autorun";
+    return "webide-autorun";
   }
 
   /* Held in memory as well as in storage. A browser with site data blocked
@@ -599,19 +593,14 @@
         return autoChoice[key];
       }
     } catch (e) { /* storage blocked; fall through to the default */ }
-    return !window.WebIDERun.isGame(allFiles());
+    return true;
   }
 
-  /* Called whenever the project might have become a game or stopped being
-     one, so the box always shows the answer for what is actually open. */
   function paintAuto() {
     if (!autoBox) return;
-    var isGame = window.WebIDERun.isGame(allFiles());
     autoBox.checked = autoWanted();
-    autoBox.parentNode.title = isGame
-      ? "Reload the game when you stop typing. Off by default: a reload starts "
-        + "the game over."
-      : "Update the preview when you stop typing, without pressing Run.";
+    autoBox.parentNode.title =
+      "Update the preview when you stop typing, without pressing Run.";
   }
 
   function scheduleAuto() {
@@ -720,96 +709,10 @@
     }
   });
 
-  // --------------------------------------------------------- sprite panel
-  /* Only useful once a project is a game, so the button appears with one —
-     the same rule the Python editor uses. */
-  var spritesToggle = $("sprites-toggle");
-  var spritePanel = $("sprites");
-  var spriteGrid = $("sprite-grid");
-  var spritesFilled = false;
-
-  function closeSprites() {
-    spritePanel.hidden = true;
-    spritesToggle.setAttribute("aria-expanded", "false");
-    relayout();
-  }
-
-  function fillSprites() {
-    if (spritesFilled) return;
-    spritesFilled = true;
-    var list = window.WEBIDE.sprites || [];
-    spriteGrid.textContent = "";
-    list.forEach(function (s) {
-      var cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = "sprite";
-      cell.dataset.name = s.name;
-      cell.title = s.name + " — " + s.w + "×" + s.h + " — click to load it";
-      cell.innerHTML =
-        '<span class="sprite-img"><img src="' +
-        window.WebIDERun.GAME_ROOT + "sprites/" + s.name +
-        '.png" alt="" loading="lazy"></span>' +
-        '<span class="sprite-name"></span>';
-      cell.querySelector(".sprite-name").textContent = s.name;
-      cell.addEventListener("click", function () {
-        insertLoadSprite(s.name);
-      });
-      spriteGrid.appendChild(cell);
-    });
-  }
-
-  /* The line a student actually needs, and the one they mistype: the name and
-     the path have to agree. Dropped into script.js wherever the caret is. */
-  function insertLoadSprite(name) {
-    if (window.WEBIDE.readonly) return;
-    // the file being typed into, not the lit tab — a student reading the notes
-    // shouldn't have them closed just because they clicked a sprite
-    var here = editingFile();
-    var target = /\.m?js$/i.test(here) ? here : "script.js";
-    if (!docs[target]) target = here;
-    if (here !== target) switchTo(target);
-    editor.replaceSelection(
-      'loadSprite("' + name + '", "sprites/' + name + '.png");\n', "end");
-    editor.focus();
-  }
-
-  spritesToggle.addEventListener("click", function () {
-    var open = spritePanel.hidden;
-    if (open) { fillSprites(); spritePanel.hidden = false; }
-    else spritePanel.hidden = true;
-    spritesToggle.setAttribute("aria-expanded", String(open));
-    relayout();
-  });
-  $("sprites-close").addEventListener("click", closeSprites);
-
-  $("sprite-search").addEventListener("input", function (e) {
-    var q = e.target.value.trim().toLowerCase();
-    var shown = 0;
-    Array.prototype.forEach.call(spriteGrid.children, function (cell) {
-      var hit = !q || cell.dataset.name.indexOf(q) >= 0;
-      cell.hidden = !hit;
-      if (hit) shown++;
-    });
-    $("sprite-empty").hidden = shown > 0;
-  });
-
-  /* Follows the project: add the library tag and the button appears, remove it
-     and the panel goes away. */
-  function refreshSpriteButton() {
-    var isGame = window.WebIDERun.isGame(allFiles()) &&
-                 (window.WEBIDE.sprites || []).length > 0;
-    spritesToggle.hidden = !isGame;
-    if (!isGame && !spritePanel.hidden) closeSprites();
-  }
-
-  /* Both of these follow the same fact — whether the project is a game — so
-     they are answered together, on the one event that can change it. */
   editor.on("change", function () {
-    refreshSpriteButton();
     paintAuto();
     scheduleAuto();
   });
-  refreshSpriteButton();
 
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */
@@ -921,8 +824,8 @@
   // -------------------------------------------------------------- download
   /* The whole project as a zip, so a student can unzip it, double-click
      index.html and have it run with no internet. That works because the files
-     keep real relative links rather than being inlined — a game's
-     <script src="kaplay.js"> resolves against the folder just as it resolved
+     keep real relative links rather than being inlined, so
+     <link href="style.css"> resolves against the folder just as it resolved
      against this server in the preview. */
   /* Download sits in the toolbar for a signed-out student and in the account
      menu for a signed-in one, so take whichever is actually on the page. */
@@ -934,38 +837,17 @@
     return (base || "project") + ".zip";
   }
 
-  async function fetchBinary(url) {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error(url.split("/").pop() + " (" + res.status + ")");
-    return new Uint8Array(await res.arrayBuffer());
-  }
-
-  if (downloadBtn) downloadBtn.addEventListener("click", async function () {
+  if (downloadBtn) downloadBtn.addEventListener("click", function () {
     var files = allFiles();
     var entries = Object.keys(files).sort().map(function (name) {
       return { name: name, data: files[name] };
     });
 
-    var extras = window.WebIDERun.extras(files);
-    if (extras.length && !window.WEBIDE.gameInstalled) {
-      write("\nThe game library isn't installed on the server, so the download" +
-            " would not run offline. Ask your teacher to run tools/vendor.py.\n",
-            "err");
-      return;
-    }
-
     var original = downloadBtn.textContent;
     downloadBtn.disabled = true;
-    if (extras.length) downloadBtn.textContent = "Zipping…";
 
     try {
-      // fetched in parallel; these are same-origin so no CORS dance
-      var fetched = await Promise.all(extras.map(function (e) {
-        return fetchBinary(e.url).then(function (bytes) {
-          return { name: e.name, data: bytes };
-        });
-      }));
-      window.WebIDEZip.download(projectFileName(), entries.concat(fetched));
+      window.WebIDEZip.download(projectFileName(), entries);
     } catch (e) {
       write("\nCould not build the download: " + e.message + "\n", "err");
     } finally {

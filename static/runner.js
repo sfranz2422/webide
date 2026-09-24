@@ -16,27 +16,6 @@ window.WebIDERun = (function () {
   "use strict";
 
   var ENTRY = "index.html";
-  var GAME_LIB = "kaplay.js";
-  var GAME_ROOT = "/static/game/";      // kaplay.js and sprites/ live here
-
-  /* A game project is one whose page pulls in the library. Nothing else to
-     track: the boilerplate carries the tag, so what the student edits is
-     exactly what they get in a download. */
-  function isGame(files) {
-    var html = files[ENTRY] || "";
-    return new RegExp("<script[^>]*\\bsrc\\s*=\\s*[\"'][^\"']*" +
-                      GAME_LIB + "[\"']", "i").test(html);
-  }
-
-  /* The preview has no server behind it and a null origin, so a relative URL
-     has nothing to resolve against. A <base> pointing at this app fixes both
-     kaplay.js and every sprites/… path in one line, and — because it lives in
-     the assembled document rather than the student's file — the same markup
-     still resolves against the local folder once the project is unzipped. */
-  function baseTag() {
-    return '<base href="' + location.origin + GAME_ROOT + '">';
-  }
-
   /* Sent into the page ahead of the student's own code. Mirrors console output
      and errors back to the editor. Kept in its own <script> element so the
      student's line numbers still start at 1 in their own file. */
@@ -194,15 +173,6 @@ window.WebIDERun = (function () {
       "  });",
       "",
       "  window.addEventListener('load', function () {",
-      "    // A game page whose library never defined itself would otherwise",
-      "    // only produce 'kaplay is not defined' from the student's own line,",
-      "    // which points at the wrong file entirely.",
-      "    var needsLib = !!document.querySelector('script[src*=\"" + GAME_LIB + "\"]');",
-      "    if (needsLib && typeof window.kaplay === 'undefined') {",
-      "      send('error', 'The game library did not load, so nothing below it ran.'",
-      "        + ' Check that " + GAME_LIB + " is installed on the server and is the'",
-      "        + ' classic build, not the ES module one.');",
-      "    }",
       "    send('ready', '');",
       "  });",
       "})();"
@@ -254,19 +224,6 @@ window.WebIDERun = (function () {
 
   function marker(name) { return "/*@webide:" + name + "*/"; }
 
-  /* The library is fetched cross-origin (the preview has a null origin), and
-     the browser hides the detail of any error a cross-origin script throws —
-     you get a bare "Script error." with no file or line, which is close to
-     useless. Adding crossorigin="anonymous" opts into the real message, and
-     works because /static/game/ is served with permissive CORS. */
-  function markLibraryScript(html) {
-    return html.replace(
-      new RegExp("<script\\b(?![^>]*\\bcrossorigin)([^>]*\\bsrc\\s*=\\s*[\"'][^\"']*" +
-                 GAME_LIB + "[\"'][^>]*)>", "gi"),
-      '<script crossorigin="anonymous"$1>'
-    );
-  }
-
   /* Where does each inlined file's line 1 sit in the assembled document?
      Returns { "script.js": offset } such that
      studentLine = documentLine - offset. */
@@ -298,9 +255,7 @@ window.WebIDERun = (function () {
   function assemble(files, token, entry, sent) {
     var start = entry && files[entry] !== undefined ? entry : ENTRY;
     var html = files[start] || "";
-    // <base> must come before anything that uses a URL, so it goes in first
-    var head = (isGame(files) ? baseTag() + "\n" : "") +
-               "<script>" + bridge(token, pages(files), sent) + "\n</script>";
+    var head = "<script>" + bridge(token, pages(files), sent) + "\n</script>";
     var withBridge;
 
     if (/<head[^>]*>/i.test(html)) {
@@ -311,7 +266,6 @@ window.WebIDERun = (function () {
       withBridge = head + "\n" + html;
     }
     var doc = inline(withBridge, files);
-    doc = markLibraryScript(doc);
     return { html: doc, offsets: lineOffsets(doc, files) };
   }
 
@@ -329,32 +283,9 @@ window.WebIDERun = (function () {
     return "";
   }
 
-  /* What a download needs beyond the student's own files, so the unzipped
-     folder runs with no internet: the library, plus every sprite. The whole
-     pack goes in rather than only the ones we can see referenced — a sprite
-     name built at runtime (a variable, a random pick, string concatenation)
-     is invisible to any scan, and a game that works in class but breaks at
-     home is the worst possible outcome. */
-  function extras(files) {
-    if (!isGame(files)) return [];
-    var list = [{ name: GAME_LIB, url: GAME_ROOT + GAME_LIB }];
-    var manifest = window.WEBIDE && window.WEBIDE.sprites;
-    (manifest || []).forEach(function (s) {
-      list.push({
-        name: "sprites/" + s.name + ".png",
-        url: GAME_ROOT + "sprites/" + s.name + ".png"
-      });
-    });
-    return list;
-  }
-
   return {
     ENTRY: ENTRY,
-    GAME_LIB: GAME_LIB,
-    GAME_ROOT: GAME_ROOT,
-    isGame: isGame,
     pages: pages,
-    extras: extras,
     assemble: assemble,
     inline: inline,
     locate: locate
