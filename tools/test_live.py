@@ -725,7 +725,7 @@ check("  turning in posts the whole project, not an empty map",
       "saved.files" in submit_call and "files: {}" not in submit_call,
       "an empty map wipes the assignment's own files on hand-in")
 check("  having saved it first, so the two agree",
-      "keep(mine.getValue()).then" in live_code,
+      "keep().then" in live_code,
       "otherwise what is handed in is not what was saved")
 
 check("  handing in through the editor's own endpoint",

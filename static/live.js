@@ -200,7 +200,7 @@
        any other file the assignment shipped — at the exact moment the work
        is handed in, and without a word. Keeping first merges the edit into
        the draft and hands back the whole map; that map is what goes in. */
-    keep(mine.getValue()).then(function (saved) {
+    keep().then(function (saved) {
       if (!saved) {
         turnInBtn.disabled = false;
         window.alert("Could not save before turning in. Try again.");
@@ -225,11 +225,11 @@
 
   /* One place that writes to the lesson's draft, used by Save, by autosave
      and by Turn in — so the three cannot disagree about what a project is. */
-  function keep(source) {
+  function keep() {
     return fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: source })
+      body: JSON.stringify({ code: mine.getValue() })
     }).then(function (res) { return res.json(); })
       .then(function (data) { return data && !data.error ? data : null; });
   }
