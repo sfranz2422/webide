@@ -778,10 +778,39 @@
   editor.on("change", function () {
     paintAuto();
     scheduleAuto();
+    rescue.noteEdit();
   });
 
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */
+  /* The safety net for anyone not signed in — attached before the account
+     module, so a rescued project is in the editor before autosave forms an
+     opinion about what the project is. */
+  var rescue = window.IDERescue.attach({
+    app: "webide",
+    cfg: {
+      signedIn: window.WEBIDE.signedIn,
+      assignmentSlug: window.WEBIDE.assignmentSlug,
+      draftSlug: window.WEBIDE.draftSlug,
+      draftFresh: window.WEBIDE.draftFresh
+    },
+    readAll: allFiles,
+    writeAll: function (incoming) {
+      Object.keys(docs).forEach(function (name) { delete docs[name]; });
+      Object.keys(incoming).forEach(function (name) {
+        docs[name] = CodeMirror.Doc(incoming[name], modeFor(name));
+      });
+      // A WebIDE project is its entry page; without one there are no tabs
+      // and nothing to run.
+      if (!docs[ENTRY]) docs[ENTRY] = CodeMirror.Doc("", "htmlmixed");
+      active = ENTRY;
+      showEditorDoc(ENTRY);
+      renderTabs();
+      relayout();
+    },
+    onRestored: function () { if (account) account.noteEdit(); }
+  });
+
   account = window.WebIDEAccount.attach({
     read: function () {
       return { files: allFiles(), title: $("title").value };
