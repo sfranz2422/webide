@@ -929,17 +929,27 @@
       return lastVersion;
     }
 
+    /* The project's notes: its first .md, the same one a student opening the assignment link is shown first. Sent on every push so the class keeps
+       them beside the lesson whichever tab is open here — before this, they
+       reached the class only while the .md tab was selected. */
+    function liveNotes() {
+      var md = fileNames().filter(window.WebIDENotes.isMarkdown);
+      return md.length ? docs[md[0]].getValue() : "";
+    }
+
     function pushNow() {
       if (!liveCode) return;
       var name = active;
       var text = docs[name] ? docs[name].getValue() : "";
-      var stamp = name + "\u0000" + text;
+      var notes = liveNotes();
+      var stamp = name + "\u0000" + text + "\u0000" + notes;
       if (stamp === lastSent) return;      // nothing typed since last time
       lastSent = stamp;
       fetch("/api/live/" + encodeURIComponent(liveCode) + "/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: text, filename: name, seq: nextSeq() })
+        body: JSON.stringify({ body: text, filename: name, notes: notes,
+                               seq: nextSeq() })
       }).then(function (res) {
         if (res.status === 403 || res.status === 409) stopLive(true);
       }).catch(function () {
