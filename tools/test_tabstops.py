@@ -22,7 +22,7 @@ And the ways of getting this wrong are all invisible in a screenshot:
   * Tab moving a fixed four from column 2, so the file is still misaligned
     and now nobody can see by how much
 
-The two handlers are pulled out of the shipped app.js and run here against
+The two handlers are pulled out of the shipped tabstops.js and run here against
 a small stand-in editor. Retyping them would be testing a copy that happens
 to agree with the original today.
 """
@@ -36,7 +36,9 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
+TABSTOPS = ROOT / "static" / "tabstops.js"
 APPJS = ROOT / "static" / "app.js"
+LIVEJS = ROOT / "static" / "live.js"
 
 results = []
 
@@ -53,11 +55,13 @@ def done():
     sys.exit(1 if bad else 0)
 
 
-app = APPJS.read_text()
+app = TABSTOPS.read_text()
+main_js = APPJS.read_text()
+live_js = LIVEJS.read_text()
 
 
 def lift(name):
-    """The named function, exactly as it ships, brace-matched out of app.js."""
+    """The named function, exactly as it ships, brace-matched out of tabstops.js."""
     start = app.find("function %s(cm) {" % name)
     if start < 0:
         return ""
@@ -80,12 +84,29 @@ if not spaces_fn:
     m = re.search(r"function spaces\(n\) \{.*?\n  \}", app, re.S)
     spaces_fn = m.group(0) if m else ""
 
-check("indentToTabStop was found in app.js", len(tab_fn) > 100, "%d chars" % len(tab_fn))
-check("backspaceToTabStop was found in app.js", len(back_fn) > 100,
+check("indentToTabStop was found in tabstops.js", len(tab_fn) > 100, "%d chars" % len(tab_fn))
+check("backspaceToTabStop was found in tabstops.js", len(back_fn) > 100,
       "%d chars" % len(back_fn))
 check("  and the helper it uses", "new Array(n + 1).join" in spaces_fn)
-check("both are actually bound to the keys", "Tab: indentToTabStop" in app
-      and "Backspace: backspaceToTabStop" in app)
+# Both editors a student types into. The live-lesson editor went without
+# these because it was configured separately and nothing here looked at it.
+check("both are bound to the keys in the main editor",
+      "Tab: indentToTabStop" in main_js
+      and "Backspace: backspaceToTabStop" in main_js
+      and "WebIDETabStops.indentToTabStop" in main_js)
+check("both are bound to the keys in the live-lesson editor",
+      "Tab: window.WebIDETabStops.indentToTabStop" in live_js
+      and "Backspace: window.WebIDETabStops.backspaceToTabStop" in live_js)
+# The stops are read from the editor, so the live one must use the same
+# unit as the main one, or the same page nests differently in each.
+import re as _re
+def _unit(js, var):
+    m = _re.search(r"%s = CodeMirror\.fromTextArea\(.*?indentUnit: (\d+)" % var, js, _re.S)
+    return m and m.group(1)
+check("  with the same indent unit in both",
+      _unit(main_js, "editor") is not None
+      and _unit(main_js, "editor") == _unit(live_js, "mine"),
+      "editor %s, live %s" % (_unit(main_js, "editor"), _unit(live_js, "mine")))
 
 # A stand-in editor: one line, one caret, the options the real editor uses.
 HARNESS = r"""

@@ -88,20 +88,52 @@
     });
   });
 
+  /* The same settings and keys as the main editor. This editor was once
+     configured on its own and went without tab stops, tag closing and name
+     completion, and indented by four where the editor indents by two — so
+     a page typed here and opened in the editor came out with two different
+     nestings. Nothing broke; it just behaved worse than the editor students
+     already knew, in the one lesson where the whole class is copying
+     nesting off the board. */
   var mine = CodeMirror.fromTextArea($("mine"), {
     mode: "htmlmixed",
     theme: cmTheme(),
     lineNumbers: true,
-    indentUnit: 4,
-    tabSize: 4,
+    indentUnit: 2,
+    tabSize: 2,
     indentWithTabs: false,
     matchBrackets: true,
     autoCloseBrackets: true,
+    // see app.js: close every tag on the line it was opened on
+    autoCloseTags: { indentTags: [] },
     extraKeys: {
-      "Ctrl-/": "toggleComment",
-      "Cmd-/": "toggleComment",
+      Tab: window.WebIDETabStops.indentToTabStop,
+      Backspace: window.WebIDETabStops.backspaceToTabStop,
+      "Shift-Tab": function (cm) { cm.indentSelection("subtract"); },
+      "Ctrl-/": function (cm) { cm.toggleComment({ indent: true }); },
+      "Cmd-/": function (cm) { cm.toggleComment({ indent: true }); },
       "Ctrl-Enter": function () { run(); },
       "Cmd-Enter": function () { run(); }
+    }
+  });
+
+  /* Completion of the student's own names, exactly as in the editor. The
+     live copy is one page, run as the entry file, so it completes as that
+     file does: classes and ids already used in their markup. Names come
+     from what the student typed, never from the teacher's pane —
+     suggesting the lesson's names would be the copy button by another
+     route. */
+  var hintTimer = null;
+  mine.on("change", function (cm, change) {
+    var typed = change.origin === "+input" && change.text.join("");
+    if (typed && /^[A-Za-z0-9_-]$/.test(typed)) {
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(function () {
+        if (cm.state.completionActive) return;
+        var files = {};
+        files[window.WebIDERun.ENTRY] = mine.getValue();
+        window.WebIDEComplete.show(cm, window.WebIDERun.ENTRY, files);
+      }, 140);
     }
   });
 
