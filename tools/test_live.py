@@ -446,10 +446,11 @@ check("  and tab stops, and tag closing",
       "tabstops.js" in out_page and "closetag.min.js" in out_page
       and "xml-fold.min.js" in out_page)
 _lj = open(os.path.join(HERE, "..", "static", "live.js")).read()
+# Completed as the file being typed in, from every tab — so a class used in
+# their index.html is offered in their style.css, as in the editor.
 check("  and live.js offers completion on the student's own editor",
-      "WebIDEComplete.show(cm" in _lj
-      and "= mine.getValue();" in _lj[_lj.index("WebIDEComplete.show") - 400:
-                                       _lj.index("WebIDEComplete.show")])
+      "WebIDEComplete.show(cm, active, allFiles())" in _lj
+      and re.search(r"docs\[ENTRY\] *= *mine\.getDoc\(\);", _lj) is not None)
 check("  and closes tags the way the editor does",
       "autoCloseTags: { indentTags: [] }" in _lj)
 
@@ -548,7 +549,7 @@ check("  and reloading the editor does not drop it",
 
 def starter_of(page):
     """What the page tells live.js to start the student's editor with."""
-    m = re.search(r"^\s*starter: (.*)$", page, re.M)
+    m = re.search(r"^\s*starter: (.*?),?$", page, re.M)
     if not m:
         return None
     try:
@@ -667,6 +668,72 @@ finally:
     db.close()
 check("  and the project's other files survived being handed in",
       "extra.css" in kept, sorted(kept))
+
+# THE REST OF THE PROJECT, AS TABS. The live page was index.html alone, so
+# a student could not see the stylesheet the lesson was about, and their
+# page ran unstyled. The page is handed the same files the handout link
+# would open — their draft's — and a save carries the tabs back.
+def starter_files_of(page):
+    m = re.search(r"^\s*starterFiles: (.*?),?$", page, re.M)
+    try:
+        return json.loads(m.group(1)) if m else None
+    except ValueError:
+        return "<not JSON: %s>" % m.group(1)
+
+
+def kept_now():
+    db = W.SessionLocal()
+    try:
+        return db.query(accounts.Draft).filter_by(slug=KEPT).first().file_map()
+    finally:
+        db.close()
+
+
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "<h1>mine</h1>",
+                       "files": {"index.html": "<h1>stale</h1>",
+                                 "extra.css": "body { color: blue }",
+                                 "style.css": "h1 { margin: 0 }"}})
+check("a save from the live page keeps what they typed in the other tabs",
+      r.status_code == 200 and kept_now() == {"index.html": "<h1>mine</h1>",
+                                              "extra.css": "body { color: blue }",
+                                              "style.css": "h1 { margin: 0 }"},
+      kept_now())
+check("  index.html from `code`, whatever the map says",
+      kept_now().get("index.html") == "<h1>mine</h1>", kept_now().get("index.html"))
+check("  and hands back the project as saved, for Turn in",
+      r.get_json().get("files") == kept_now(), r.get_json().get("files"))
+# An empty map is an old editor tab from before the tabs, which sent `{}`.
+# Taken literally it would strip every file but index.html.
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "<h1>mine</h1>", "files": {}})
+check("  while an empty map leaves the other files alone",
+      r.status_code == 200 and "style.css" in kept_now(), kept_now())
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "<h1>mine</h1>", "files": {"../x.css": "no"}})
+check("  and a file name the editor would refuse is refused here too",
+      r.status_code == 400 and "../x.css" not in kept_now(), r.status_code)
+
+# Their draft's — style.css is in it now and not in the assignment — so this
+# cannot pass on the assignment's files alone. index.html is not among them:
+# it is `starter`, the one key a browser from before the tabs still has.
+check("the live page hands the student their project's other files",
+      starter_files_of(student.get("/live/%s" % LESSON).get_data(as_text=True))
+      == {n: b for n, b in kept_now().items() if n != "index.html"},
+      starter_files_of(student.get("/live/%s" % LESSON).get_data(as_text=True)))
+check("  and a student with no draft gets the assignment's",
+      starter_files_of(stranger.get("/live/%s" % LESSON).get_data(as_text=True))
+      == {"extra.css": "body { color: red }"})
+
+# The autosave goes to /api/draft/<slug>, which REPLACES the files and
+# refuses a map without index.html. The live page once sent it `{}`, and
+# every autosave after the first Save was a 400 nobody saw.
+r = student.post("/api/draft/" + KEPT,
+                 json={"files": {"index.html": "<h1>auto</h1>",
+                                 "style.css": "h1 { margin: 1px }"}})
+check("  and what its autosave sends is accepted",
+      r.status_code == 200 and kept_now().get("style.css") == "h1 { margin: 1px }",
+      r.status_code)
 
 seen_by_teacher = teacher.get("/teacher/" + hw).get_data(as_text=True)
 check("  and it reaches the teacher's dashboard",
@@ -871,10 +938,42 @@ def editors_behind(field):
     return found
 
 
+# `mainSource()` is index.html's document, whichever tab is showing.
+# Resolved to the editor that document belongs to, so a mainSource() that
+# read the mirror would fail here rather than slip past as unknown.
+main_ok = (re.search(r"function mainSource\(\) \{ return docs\[ENTRY\]\.getValue\(\); \}",
+                     live_code) is not None
+           and re.findall(r"docs\[ENTRY\] *= *([^;]+);", live_code) == ["mine.getDoc()"])
+_real_code = live_code
+live_code = live_code.replace("mainSource()",
+                              "mine.getValue()" if main_ok else "?mainSource()")
 saved_from = editors_behind("code")
+live_code = _real_code
 check("  and what is saved to their projects is their editor, not the mirror",
       bool(saved_from) and saved_from == {"mine"},
       "saved from: %s" % sorted(saved_from))
+
+# THE OTHER TABS ARE THEIRS TOO. Every one is a document made here from
+# the page or their browser — never filled from the mirror or the poll.
+doc_fills = re.findall(r"docs\[[^\]]+\] *= *([^;]+);", live_code)
+check("  and every other tab is filled from the page or their browser",
+      bool(doc_fills) and all("mirror" not in f and "data." not in f
+                              for f in doc_fills),
+      doc_fills)
+check("  and none is ever written to afterwards",
+      re.search(r"docs\[[^\]]+\]\.(setValue|replaceRange)\(", live_code) is None)
+check("  every save carries every tab, never an empty map",
+      "files: {}" not in live_code
+      and len(re.findall(r"files: allFiles\(\)", live_code)) == 3,
+      "an autosave sending {} was refused, and nothing after the first Save was kept")
+run_body = live_code[live_code.index("function run()"):]
+run_body = run_body[:run_body.index("\n  }\n")]
+check("  and Run builds their page from every tab",
+      "var files = allFiles();" in run_body
+      and "assemble(files, token, ENTRY" in run_body,
+      "with index.html alone the page ran without its stylesheet")
+check("  with tabs on the page to switch between them",
+      'id="mine-tabs"' in page and "starterFiles:" in page)
 
 check("  and nothing in the polling path touches it at all",
       "mine.setValue(" not in after_mirror,

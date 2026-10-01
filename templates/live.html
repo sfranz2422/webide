@@ -149,11 +149,21 @@
     </div>
 
     <div class="live-pane live-mine">
-      <div class="pane-head">
-        <span>Your turn — type it yourself</span>
+      {#  Tabs, like the editor's: index.html and every other file in their
+          project — the style.css it links to, a script.js. The pane was
+          index.html alone once, and a student could neither see the
+          stylesheet the lesson was about nor run a page that used it. Every
+          tab is theirs; nothing from the network fills one. #}
+      <div class="pane-head pane-head-tabs">
+        <div class="mine-head">
+          <span class="mine-label">Your turn</span>
+          <div id="mine-tabs" class="tabs" role="tablist"></div>
+          <button id="mine-new-file" class="linkbtn" type="button"
+                  title="Add a file to your project, like the one {{ live.host_name or 'your teacher' }} made">+ File</button>
+        </div>
         <span id="mine-saved" class="dim" aria-live="polite"></span>
         {% if not user %}
-          <span class="dim">Kept in this browser — sign in to save it properly</span>
+          <span class="dim" title="Kept in this browser — sign in to save it properly">Kept in this browser — sign in to save it properly</span>
         {% endif %}
       </div>
       <div class="editor-wrap"><textarea id="mine"></textarea></div>
@@ -238,7 +248,8 @@
     assignment: {{ (assignment.slug if assignment else '') | tojson }},
     assignmentTitle: {{ (assignment.title if assignment else '') | tojson }},
     submittedAt: {{ (submitted_at or '') | tojson }},
-    starter: {{ (starter or '') | tojson }}
+    starter: {{ (starter or '') | tojson }},
+    starterFiles: {{ (starter_files or {}) | tojson }}
   };
 </script>
 {#  Only a student following the lesson needs an editor and Python. The join

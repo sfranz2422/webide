@@ -1621,6 +1621,20 @@ def live_keep(code):
         if len(source.encode("utf-8")) > MAX_FILE_BYTES:
             return jsonify(error="That program is too large to save."), 413
 
+        # The whole project, from the tabs on the live page, with `code` as
+        # its index.html. An EMPTY or missing map means "leave the other files
+        # alone", never "delete them": the live page has no way to remove a
+        # file, so an empty map from it can only be an editor tab still running
+        # the code from before it had tabs — which sent `files: {}` — and
+        # taking that at its word would strip a style.css the assignment
+        # shipped without a word.
+        sent = data.get("files")
+        files = None
+        if isinstance(sent, dict) and sent:
+            files, file_error = validate_files(dict(sent, **{ENTRY: source}))
+            if file_error:
+                return jsonify(error=file_error), 400
+
         item = None
         if live.assignment_id:
             item = db.query(accounts.Assignment).filter_by(
@@ -1635,17 +1649,18 @@ def live_keep(code):
                 owner_id=user.id, assignment_id=item.id).first()
 
         # WEBIDE KEEPS EVERYTHING IN `files`, and `code` is always "" — see
-        # /api/draft. The live pane edits one file, the entry page, so the
-        # rest of a project are left exactly as they were: an assignment that
-        # ships a style.css must not lose it because a student typed in the
-        # HTML pane.
+        # /api/draft. What the live page posts as `code` is its index.html.
+        # The other files are its tabs when it sends them, and otherwise left
+        # exactly as they were: an assignment that ships a style.css must not
+        # lose it because an old tab saved only the HTML.
         if draft is None:
             # SEEDED FROM THE ASSIGNMENT, exactly as /a/<slug> seeds one.
             # Without this a student who joins the lesson without ever
             # opening the handout link gets a project missing every file
             # the assignment shipped — the stylesheet, the images list —
             # and only finds out when their page renders unstyled.
-            start = dict(item.file_map()) if item is not None else {}
+            start = (files if files is not None else
+                     dict(item.file_map()) if item is not None else {})
             start[ENTRY] = source
             draft = accounts.Draft(
                 slug=accounts.new_id(db, accounts.Draft),
@@ -1658,7 +1673,7 @@ def live_keep(code):
             )
             db.add(draft)
         else:
-            keep = draft.file_map()
+            keep = files if files is not None else draft.file_map()
             keep[ENTRY] = source
             draft.files = json.dumps(keep)
             draft.updated_at = accounts.now()
@@ -1718,9 +1733,12 @@ def live_page(code):
 
         # WHAT THE STUDENT'S EDITOR STARTS WITH, when their browser has nothing
         # of its own for this lesson. The same as /a/<slug> would give them:
-        # their own draft of the assignment if they have one, else its starter
-        # — the entry file, index.html, which is the one
-        # live_keep writes back to; the live editor holds one file.
+        # their own draft of the assignment if they have one, else its starter.
+        # index.html goes in `starter`, and every other file — the style.css
+        # and script.js it links to — in `starter_files`, as tabs beside it.
+        # The page was index.html alone once: a student could not see the
+        # stylesheet the lesson was about, and Run showed their page unstyled
+        # because the file it linked to was not in what was run.
         #
         # THE DRAFT IS NOT A NICETY. Saving from the live page writes into
         # that draft, replacing that file with the live editor. Started empty,
@@ -1732,6 +1750,7 @@ def live_page(code):
         # starting point, like opening the link, not the teacher reaching into
         # their editor.
         starter = ""
+        starter_files = {}
         if item is not None:
             source = item.file_map()
             if user is not None:
@@ -1740,6 +1759,7 @@ def live_page(code):
                 if mine is not None:
                     source = mine.file_map()
             starter = source.get(ENTRY, "")
+            starter_files = {n: b for n, b in source.items() if n != ENTRY}
 
         ctx = user_context(db)
         ctx.update(
@@ -1750,6 +1770,7 @@ def live_page(code):
             assignment=item,
             submitted_at=submitted_at,
             starter=starter,
+            starter_files=starter_files,
             error="",
         )
         return render_template("live.html", **ctx)

@@ -117,10 +117,10 @@
     }
   });
 
-  /* Completion of the student's own names, exactly as in the editor. The
-     live copy is one page, run as the entry file, so it completes as that
-     file does: classes and ids already used in their markup. Names come
-     from what the student typed, never from the teacher's pane —
+  /* Completion of the student's own names, exactly as in the editor: the
+     file being typed in, completed from every file of their project — a
+     class used in their index.html is offered in their style.css. Names
+     come from what the student typed, never from the teacher's pane —
      suggesting the lesson's names would be the copy button by another
      route. */
   var hintTimer = null;
@@ -130,9 +130,7 @@
       clearTimeout(hintTimer);
       hintTimer = setTimeout(function () {
         if (cm.state.completionActive) return;
-        var files = {};
-        files[window.WebIDERun.ENTRY] = mine.getValue();
-        window.WebIDEComplete.show(cm, window.WebIDERun.ENTRY, files);
+        window.WebIDEComplete.show(cm, active, allFiles());
       }, 140);
     }
   });
@@ -157,19 +155,154 @@
   if (start) mine.setValue(start);
   mine.clearHistory();
 
+  /* ------------------------------------------------------------ their files
+   *
+   * index.html and the rest of their project, each its own CodeMirror
+   * document swapped into `mine`, exactly as the editor keeps them — so
+   * switching tabs keeps the caret and the undo history, and there is still
+   * only the one editor a student types in. The mirror never fills any of
+   * these.
+   *
+   * The other files are kept in this browser beside index.html, under their
+   * own key, and the same rule decides where they start: what this browser
+   * has wins, else the project's own files (their draft's, or the
+   * assignment's). index.html's key is unchanged, so a browser that kept a
+   * lesson before tabs existed still gets its typing back — with the
+   * project's files beside it.
+   *
+   * A .md file stays out of the strip. It is the project's notes, which the
+   * class already reads in the Notes pane, but it is still part of what is
+   * saved: a save that left it out would delete the assignment's notes. */
+  var ENTRY = window.WebIDERun.ENTRY;
+  var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
+  var FILES_KEY = DRAFT_KEY + "-files";
+  var docs = {};
+  var active = ENTRY;
+  var tabsEl = $("mine-tabs");
+  docs[ENTRY] = mine.getDoc();
+
+  var keptFiles = null;
+  try {
+    keptFiles = JSON.parse(window.localStorage.getItem(FILES_KEY) || "null");
+  } catch (e) { /* blocked, or not ours to read: the project's own files */ }
+  var startFiles = (keptFiles && typeof keptFiles === "object")
+    ? keptFiles : (L.starterFiles || {});
+  Object.keys(startFiles).forEach(function (name) {
+    if (name !== ENTRY && typeof startFiles[name] === "string") {
+      docs[name] = CodeMirror.Doc(startFiles[name], modeFor(name));
+    }
+  });
+
+  // the same as the editor's, in app.js
+  function modeFor(name) {
+    if (/\.html?$/i.test(name)) return "htmlmixed";
+    if (/\.css$/i.test(name)) return "css";
+    if (/\.m?js$/i.test(name)) return "javascript";
+    if (/\.json$/i.test(name)) return { name: "javascript", json: true };
+    return null;                                  // plain text
+  }
+
+  /* The page, whichever tab is open. NOT mine.getValue(): with style.css
+     showing, that is the stylesheet, and Save would put it in index.html. */
+  function mainSource() { return docs[ENTRY].getValue(); }
+
+  // Everything but index.html, which is kept under its own key.
+  function otherFiles() {
+    var out = {};
+    Object.keys(docs).forEach(function (n) {
+      if (n !== ENTRY) out[n] = docs[n].getValue();
+    });
+    return out;
+  }
+
+  // The whole project, index.html included: what Run builds the page from
+  // and what every save sends.
+  function allFiles() {
+    var out = otherFiles();
+    out[ENTRY] = mainSource();
+    return out;
+  }
+
+  function isNotes(name) {
+    return window.WebIDENotes && window.WebIDENotes.isMarkdown(name);
+  }
+
+  function renderTabs() {
+    if (!tabsEl) return;
+    tabsEl.textContent = "";
+    var names = [ENTRY].concat(Object.keys(docs).filter(function (n) {
+      return n !== ENTRY && !isNotes(n);
+    }).sort());
+    names.forEach(function (name) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "tab" + (name === active ? " tab-on" : "");
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(name === active));
+      tab.textContent = name;
+      tab.addEventListener("click", function () { switchTo(name); });
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function switchTo(name) {
+    if (!docs[name] || name === active) return;
+    active = name;
+    mine.swapDoc(docs[name]);
+    mine.setOption("mode", modeFor(name));
+    renderTabs();
+    mine.focus();
+  }
+
+  function keepInBrowser() {
+    try {
+      window.localStorage.setItem(DRAFT_KEY, mainSource());
+      window.localStorage.setItem(FILES_KEY, JSON.stringify(otherFiles()));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* A file of their own, for following a teacher who makes one mid-lesson.
+     Same names the editor allows, and the server checks again. No way to
+     delete one here, on purpose: the server reads an empty map from this
+     page as "leave the files alone" (see live_keep), which is only safe
+     while nothing on this page can empty it. */
+  var newFileBtn = $("mine-new-file");
+  if (newFileBtn) {
+    newFileBtn.addEventListener("click", function () {
+      var name = window.prompt("Name the new file, for example style.css");
+      if (name === null) return;
+      name = name.trim();
+      if (!NAME_OK.test(name) || name.toLowerCase() === ENTRY || isNotes(name)) {
+        window.alert("Use letters, digits, dashes and underscores, and end " +
+                     "with an extension like .css or .js.");
+        return;
+      }
+      if (docs[name]) { switchTo(name); return; }
+      docs[name] = CodeMirror.Doc("", modeFor(name));
+      switchTo(name);
+      changed();
+    });
+  }
+
+  renderTabs();
+
   var saveTimer = null;
-  mine.on("change", function () {
+  /* Every change in any tab, and a new file, which fires no editor event. */
+  function changed() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try {
-        window.localStorage.setItem(DRAFT_KEY, mine.getValue());
+      if (keepInBrowser()) {
         note("Saved on this computer");
-      } catch (e) {
+      } else {
         note("Could not save here — keep this tab open");
       }
       autosave();
     }, 500);
-  });
+  }
+  mine.on("change", changed);
 
   /* ------------------------------------------------- into their projects
    *
@@ -236,10 +369,9 @@
     /* SAVE FIRST, THEN HAND IN WHAT WAS SAVED.
        
        A WebIDE project is its files, and turning in replaces them with what
-       is posted. This pane edits one file, so posting just that would drop
-       any other file the assignment shipped — at the exact moment the work
-       is handed in, and without a word. Keeping first merges the edit into
-       the draft and hands back the whole map; that map is what goes in. */
+       is posted. Keeping first writes every tab into the draft and hands
+       back the whole map as the server now has it — including a file this
+       page never showed — and that map is what goes in. */
     keep().then(function (saved) {
       if (!saved) {
         turnInBtn.disabled = false;
@@ -269,7 +401,7 @@
     return fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: mine.getValue() })
+      body: JSON.stringify({ code: mainSource(), files: allFiles() })
     }).then(function (res) { return res.json(); })
       .then(function (data) { return data && !data.error ? data : null; });
   }
@@ -278,7 +410,7 @@
 
   function startDraft() {
     if (!L.signedIn || pendingSave) return;
-    var text = mine.getValue();
+    var text = mainSource();
     if (!text.trim()) { note("Type something first"); return; }
     pendingSave = true;
     /* /api/live/<code>/keep, NOT /api/draft.
@@ -293,7 +425,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: text,                       // theirs, never the mirror's
-        files: {}
+        files: allFiles()
       })
     }).then(function (res) { return res.json(); })
       .then(function (data) {
@@ -316,8 +448,13 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        code: mine.getValue(),            // theirs, never the mirror's
-        files: {},
+        code: mainSource(),               // theirs, never the mirror's
+        /* Every file, index.html included, because this route REPLACES them
+           and refuses a map without index.html. It was sent `{}` once, when
+           the page had only one editor — and was answered 400 on every
+           autosave, so after the first Save nothing a student typed reached
+           their project, while the page went on saying "Saved". */
+        files: allFiles(),
         title: L.title || "Live lesson"
       })
     }).then(function (res) {
@@ -382,6 +519,9 @@
       mirrorNotes.hidden = true;
       var wasHidden = mirrorWrap.hidden;
       mirrorWrap.hidden = false;
+      // A style.css the teacher opens is CSS, not HTML to be coloured as such.
+      var mode = modeFor(data.filename || ENTRY);
+      if (mirror.getOption("mode") !== mode) mirror.setOption("mode", mode);
       // The ONLY setValue on the mirror, and there is no setValue on `mine`
       // anywhere below this line.
       if (typeof data.body === "string" && data.body !== mirror.getValue()) {
@@ -638,14 +778,15 @@
   }
 
   function run() {
-    var source = mine.getValue();          // theirs, never the mirror's
+    /* Every tab, not just index.html: the page links to style.css and
+       script.js by name, and the runner can only inline what it is given.
+       With index.html alone the page ran unstyled and its script never
+       loaded, and nothing on screen said why. */
+    var files = allFiles();                // theirs, never the mirror's
     showTeachers(false);                   // their Run, their page
     clearOutput();
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
-    var entry = window.WebIDERun.ENTRY;
-    var files = {};
-    files[entry] = source;
-    var built = window.WebIDERun.assemble(files, token, entry, null);
+    var built = window.WebIDERun.assemble(files, token, ENTRY, null);
     setBusy(true);
     freshFrame().srcdoc = built.html;
   }
