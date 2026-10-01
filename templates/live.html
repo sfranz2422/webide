@@ -175,9 +175,9 @@
         uses — no same-origin access, so nothing they write can reach this
         page or the lesson. #}
     {#  Their page and the teacher's share one pane, as two tabs. The
-        teacher's tab appears the first time they press Run and comes to
-        the front each time they run again; pressing Run here goes back to
-        the student's own.
+        teacher's tab appears the first time they press Run and gets a dot
+        each time they run again, but never comes to the front by itself —
+        the student clicks it.
 
         TWO FRAMES, NEVER ONE, and the teacher's is sandboxed exactly like
         theirs — scripts and forms, never same-origin — so the teacher's page
@@ -200,11 +200,15 @@
       </div>
     </div>
 
-    <div id="output-view" class="subpane live-console">
+    <div id="output-view" class="subpane live-console is-folded">
       {#  Same two tabs for the console, and two <pre>s for the same reason
-          as the frames: nothing from the network is written into theirs. #}
+          as the frames: nothing from the network is written into theirs.
+          Folded to its head until opened or an error; see openConsole. #}
       <div class="pane-head">
         <span class="out-tabs">
+          <button id="out-fold" class="out-fold" type="button"
+                  aria-controls="output-view" aria-expanded="false"
+                  title="Show the console">▸</button>
           <button id="out-mine" class="out-tab is-on" type="button">Console</button>
           <button id="out-teacher" class="out-tab" type="button" hidden
                   title="What {{ live.host_name or 'your teacher' }}'s page logged">{{ live.host_name or "Teacher" }}'s console</button>
@@ -241,6 +245,7 @@
     notes: {{ (live.notes if live else '') | tojson }},
     slide: {{ (live.slide if live else '') | tojson }},
     output: {{ (live.output if live else '') | tojson }},
+    cursor: {{ (live.cursor if live else '') | tojson }},
     page: {{ (live.page if live else '') | tojson }},
     pageId: {{ (live_page_id(live.page) if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},

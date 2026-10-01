@@ -330,6 +330,32 @@ teacher.post("/api/live/%s/push" % CODE,
                    "seq": 4500})
 
 
+# ------------------------------------------------ the teacher's caret
+print("\nThe teacher's caret")
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "a = 1\nb = 2", "cursor": "1:3", "seq": 4600})
+check("the caret a push names reaches the class",
+      poll_json().get("cursor") == "1:3", repr(poll_json().get("cursor")))
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "a = 1\nb = 22", "seq": 4601})
+check("  a push from an older editor leaves it alone",
+      poll_json().get("cursor") == "1:3", repr(poll_json().get("cursor")))
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": "a = 1", "cursor": "<b>", "seq": 4602})
+check("  one that is not line:ch is stored as none, not refused",
+      r.status_code == 200 and poll_json().get("cursor") == ""
+      and poll_json().get("body") == "a = 1", repr(poll_json().get("cursor")))
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "a = 1", "cursor": "0:2", "seq": 4603})
+page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+check("  and a late joiner gets it in the page",
+      re.search(r'^\s*cursor: "0:2"', page, re.M) is not None)
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": base.get("body"), "filename": base.get("filename"),
+                   "cursor": "", "seq": 4700})
+
+
 # -------------------------------------------------------------- the pages
 print("\nThe pages")
 
@@ -1207,10 +1233,13 @@ check("  set only when the page itself changes",
 check("  and the poll says which page it has",
       re.search(r'"&pg=" \+ encodeURIComponent\(shownPageId\)', live_code)
       is not None)
-check("  joining mid-lesson offers it without taking over their pane",
-      re.search(r"if \(!quietly\) showTeachers\(true\);", _tpage) is not None
+check("  a teacher's Run never takes over their pane, only gets a dot",
+      "showTeachers(true)" not in _tpage
+      and re.search(r"if \(!quietly && teacherFrame\.hidden\) pageTeacherTab\.classList\.add\(\"has-new\"\);",
+                    _tpage) is not None
       and re.search(r"showTeacherPage\(data, data\.initial\)", live_code)
-      is not None)
+      is not None,
+      "every teacher Run took the class away from their own page")
 check("the teacher's console is written only into its own pane",
       "teacherOut.textContent = data.output" in _tout
       and not re.search(r"outputEl[^;]*data\.output|write\(data\.output",
@@ -1232,6 +1261,41 @@ check("messages from the teacher's frame are not written to theirs",
       "data.webide !== token" in _listen
       and "e.source !== frame.contentWindow" in _listen
       and "teacherFrame" not in _listen)
+
+check("the editor sends its caret with every push, and moving it counts",
+      "cursor: cursor, seq: nextSeq()" in _push_fn
+      and re.search(r"var stamp = [^;]*\bcursor\b", _push_fn) is not None,
+      "a caret moved without typing would reach nobody")
+check("  but none for a notes file, which the class reads rendered",
+      re.search(r"if \((docs\[name\]|editor) && !window\.\w+Notes\.isMarkdown\(name\)\)",
+                _push_fn) is not None)
+check("the mirror draws the caret on every update",
+      re.search(r"showCaret\(typeof data\.cursor", _mirror_fn) is not None
+      and re.search(r"showMirror\(\{[^}]*cursor: L\.cursor", live_code)
+      is not None)
+_caret_fn = fn_body(live_code, "showCaret")
+check("  as a widget, so the mirror still takes no cursor",
+      "setBookmark(at, { widget: mark" in _caret_fn
+      and "mirror.setCursor" not in live_code
+      and "mirror.setSelection" not in live_code)
+check("  and follows it, unless the student has just scrolled",
+      "if (Date.now() >= followAfter) mirror.scrollIntoView(at" in _caret_fn
+      and re.search(r'\["wheel", "touchmove", "mousedown"\][\s\S]{0,160}'
+                    r'followAfter = Date\.now\(\) \+ FOLLOW_PAUSE_MS',
+                    live_code) is not None,
+      "a student reading line 4 would be yanked to line 40 every keystroke")
+check("  clearing the old caret before the text is replaced",
+      re.search(r"data\.body !== mirror\.getValue\(\)\) \{\s*clearCaret\(\);",
+                _mirror_fn) is not None,
+      "a removed line's handle throws, and the poll would stop")
+
+_live_html = open(os.path.join(WEBIDE, "templates", "live.html")).read()
+check("the console starts folded",
+      'class="subpane live-console is-folded"' in _live_html
+      and re.search(r"\n  openConsole\(false\);", live_code) is not None)
+check("  and an error opens it",
+      'if (cls === "err") openConsole(true);' in fn_body(live_code, "write"),
+      "a mistake written into a folded pane is one nobody sees")
 
 check("the editor sends slide, console and page with every push",
       "slide: slide, output: output, page: page" in _push_fn

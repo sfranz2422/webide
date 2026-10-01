@@ -525,6 +525,7 @@
       // The ONLY setValue on the mirror, and there is no setValue on `mine`
       // anywhere below this line.
       if (typeof data.body === "string" && data.body !== mirror.getValue()) {
+        clearCaret();                // its line is about to be replaced
         var scroll = mirror.getScrollInfo();
         mirror.setValue(data.body);
         // Keep the reader where they were. Without this every keystroke from
@@ -538,6 +539,7 @@
          forces a redraw. Switching a tab in front of a class is exactly when
          that would happen, so refresh on the way back. */
       if (wasHidden) mirror.refresh();
+      showCaret(typeof data.cursor === "string" ? data.cursor : "");
     }
 
     if (data.filename) {
@@ -548,6 +550,56 @@
     showNotes(data);
     showTeacherPage(data, data.initial);
     showTeacherOutput(data);
+  }
+
+  /* ------------------------------------------------ the teacher's caret
+     Where the teacher is typing, drawn as a blinking caret on a tinted line,
+     and followed: when it moves off screen the mirror scrolls to it. It is a
+     bookmark widget, not a selection or a real cursor, so the mirror stays
+     "nocursor" and still cannot be focused or copied from.
+
+     Following is the point — a class otherwise watches line 1 while the
+     teacher types on line 40 — but a student who scrolls back to read
+     something must not be yanked away mid-sentence. So scrolling the
+     mirror by hand pauses following for a few seconds, and only that does:
+     the scroll events CodeMirror fires for its own scrolling are ignored by
+     listening for the wheel, a touch and the scrollbar instead. */
+  var caretMark = null;
+  var caretLine = null;
+  var followAfter = 0;
+  var FOLLOW_PAUSE_MS = 5000;
+
+  ["wheel", "touchmove", "mousedown"].forEach(function (kind) {
+    mirrorEl.addEventListener(kind, function () {
+      followAfter = Date.now() + FOLLOW_PAUSE_MS;
+    }, { passive: true });
+  });
+
+  function clearCaret() {
+    if (caretMark) { caretMark.clear(); caretMark = null; }
+    /* A line handle from before a setValue is detached, and removing a
+       class from it throws — getLineNumber is null for exactly those. */
+    if (caretLine && mirror.getLineNumber(caretLine) !== null) {
+      mirror.removeLineClass(caretLine, "background", "mirror-caret-line");
+    }
+    caretLine = null;
+  }
+
+  function showCaret(cursor) {
+    clearCaret();
+    var m = /^(\d+):(\d+)$/.exec(cursor);
+    if (!m) return;                  // a notes file, or an older editor
+    // Clamped: the caret and the text arrive together, but a student's
+    // mirror is never trusted to be the exact shape the stamp assumed.
+    var line = Math.min(+m[1], mirror.lastLine());
+    var at = { line: line, ch: Math.min(+m[2], mirror.getLine(line).length) };
+    var mark = document.createElement("span");
+    mark.className = "mirror-caret";
+    caretMark = mirror.setBookmark(at, { widget: mark, insertLeft: true });
+    caretLine = mirror.addLineClass(line, "background", "mirror-caret-line");
+    // Only scrolls when the caret is off screen, so a mirror that already
+    // shows it does not twitch on every keystroke.
+    if (Date.now() >= followAfter) mirror.scrollIntoView(at, 60);
   }
 
   /* The project's notes, in their own pane under the console. Re-rendered
@@ -592,11 +644,10 @@
      editor is; these get their own elements and nothing here touches
      `frame` or `outputEl`.
 
-     A new page is the teacher pressing Run and wanting the class to look,
-     so both tabs come to the front. Console lines alone do not move
-     anything — the teacher's page logs as they click around in it, and
-     flipping a student's pane on every click would make their own console
-     unreadable — they only mark the tab when it is not showing. */
+     NOTHING COMES TO THE FRONT BY ITSELF. A new page used to, both tabs
+     with it, whenever the teacher pressed Run — and every Run in a lesson
+     took thirty students away from their own page mid-thought. Now the
+     tabs appear and get a dot, and the student looks when they choose to. */
   var teacherFrame = $("teacher-preview");
   var teacherOut = $("teacher-output");
   var pageMineTab = $("page-mine");
@@ -613,6 +664,7 @@
     frame.hidden = on;
     pageMineTab.classList.toggle("is-on", !on);
     pageTeacherTab.classList.toggle("is-on", on);
+    if (on) pageTeacherTab.classList.remove("has-new");
     showConsoleTab(on);
   }
 
@@ -648,7 +700,7 @@
     teacherFrame.srcdoc = data.page;
     pageTeacherTab.hidden = false;
     teacherTab.hidden = false;
-    if (!quietly) showTeachers(true);
+    if (!quietly && teacherFrame.hidden) pageTeacherTab.classList.add("has-new");
   }
 
   function showTeacherOutput(data) {
@@ -666,9 +718,39 @@
   if (teacherFrame) {
     pageMineTab.addEventListener("click", function () { showTeachers(false); });
     pageTeacherTab.addEventListener("click", function () { showTeachers(true); });
-    mineTab.addEventListener("click", function () { showConsoleTab(false); });
-    teacherTab.addEventListener("click", function () { showConsoleTab(true); });
+    mineTab.addEventListener("click", function () {
+      showConsoleTab(false); openConsole(true);
+    });
+    teacherTab.addEventListener("click", function () {
+      showConsoleTab(true); openConsole(true);
+    });
   }
+
+  /* The console starts folded to its head, leaving the column to the page
+     and the notes; the head's arrow opens it. An error opens it too — a
+     mistake written into a folded pane is a mistake nobody sees, and the
+     page simply looks broken. Not remembered between visits: folded is
+     the state every lesson should start in. */
+  var outputView = $("output-view");
+  var foldBtn = $("out-fold");
+
+  function openConsole(open) {
+    if (!outputView) return;
+    outputView.classList.toggle("is-folded", !open);
+    if (foldBtn) {
+      foldBtn.textContent = open ? "▾" : "▸";
+      foldBtn.title = open ? "Fold the console away" : "Show the console";
+      foldBtn.setAttribute("aria-expanded", String(open));
+    }
+  }
+
+  if (foldBtn) {
+    foldBtn.addEventListener("click", function () {
+      openConsole(outputView.classList.contains("is-folded"));
+    });
+  }
+  openConsole(false);
+
 
   function setState(text, kind) {
     if (!stateChip) return;
@@ -679,6 +761,7 @@
   if (typeof L.body === "string") {
     showMirror({ body: L.body, version: L.version, filename: L.filename,
                  notes: L.notes, slide: L.slide, output: L.output,
+                 cursor: L.cursor,
                  page: L.page, page_id: L.pageId,
                  // joining mid-lesson: offer the teacher's page, but leave
                  // the student looking at their own until the teacher runs
@@ -749,6 +832,7 @@
     span.textContent = text;
     outputEl.appendChild(span);
     outputEl.scrollTop = outputEl.scrollHeight;
+    if (cls === "err") openConsole(true);
   }
 
   function clearOutput() { outputEl.textContent = ""; }

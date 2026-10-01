@@ -1468,6 +1468,14 @@ def live_push(code):
         if isinstance(slide, str):
             fields["slide"] = slide if re.fullmatch(r"\d{1,4}/\d{1,4}", slide) else ""
 
+        # Where the teacher's caret is, "line:ch". Same rule as notes: only
+        # when sent. Anything else is stored as none rather than refused, so a
+        # bad caret can never cost the class the code that came with it.
+        cursor = data.get("cursor")
+        if isinstance(cursor, str):
+            fields["cursor"] = (cursor if re.fullmatch(r"\d{1,6}:\d{1,6}", cursor)
+                                else "")
+
         # The teacher's console. Trimmed here rather than refused: a
         # console.log in a loop is exactly when it is huge, and a 413 would
         # throw away the code that came with it, freezing the mirror for as
@@ -1574,6 +1582,7 @@ def live_poll(code):
             notes=live.notes or "",
             slide=live.slide or "",
             output=live.output or "",
+            cursor=live.cursor or "",
             page_id=page_id,
             # Only to a student who does not already have this page. Every
             # keystroke the teacher types moves `version`, and resending a
