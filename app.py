@@ -8,6 +8,7 @@ page's cookies, storage or DOM. The server only stores and serves shared
 project snapshots.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -38,6 +39,11 @@ APP_NAME = "webide"         # this editor, in the shared account tables
 MAX_FILES = 16
 MAX_FILE_BYTES = 200_000          # per file
 MAX_FILES_TOTAL = 600_000         # all files together
+LIVE_OUTPUT_BYTES = 20_000        # the tail of the teacher's console
+# The teacher's page as their Run built it: every file of the project inlined
+# into one document plus the console bridge, so it can be a little over
+# MAX_FILES_TOTAL.
+LIVE_PAGE_BYTES = MAX_FILES_TOTAL + 100_000
 ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alike characters
 ID_LENGTH = 7
 
@@ -1378,6 +1384,9 @@ def live_start():
                                    _slug_of_assignment(db, live.assignment_id)),
                        assignment_title=(item.title if item else
                                          _title_of_assignment(db, live.assignment_id)),
+                       # so a reload carries on from the same slide rather
+                       # than sending the class back to the title
+                       slide=live.slide or "",
                        url=url_for("live_page", code=live.code, _external=True))
 
     finally:
@@ -1453,6 +1462,34 @@ def live_push(code):
                 return jsonify(error="Those notes are too large to share live."), 413
             fields["notes"] = notes
 
+        # Which slide those notes are, "3/5", or "" when they are not slides.
+        # Same rule as notes: only when sent.
+        slide = data.get("slide")
+        if isinstance(slide, str):
+            fields["slide"] = slide if re.fullmatch(r"\d{1,4}/\d{1,4}", slide) else ""
+
+        # The teacher's console. Trimmed here rather than refused: a
+        # console.log in a loop is exactly when it is huge, and a 413 would
+        # throw away the code that came with it, freezing the mirror for as
+        # long as the loop ran. The tail is what anyone wants to read.
+        output = data.get("output")
+        if isinstance(output, str):
+            raw = output.encode("utf-8")
+            if len(raw) > LIVE_OUTPUT_BYTES:
+                output = raw[-LIVE_OUTPUT_BYTES:].decode("utf-8", "ignore")
+            fields["output"] = output
+
+        # The page the teacher's last Run built. Too big, it is DROPPED, not
+        # refused, for the same reason as the console: a 413 here would take
+        # the code down with it, and the mirror would freeze with the button
+        # still saying Live. Half a page cannot be trimmed into anything
+        # that renders, so the class is shown none rather than a broken one.
+        page = data.get("page")
+        if isinstance(page, str):
+            if len(page.encode("utf-8")) > LIVE_PAGE_BYTES:
+                page = ""
+            fields["page"] = page
+
         # One statement, so two workers cannot interleave a read and a write.
         # `version < seq` is what drops a stale push, and it is also why this
         # cannot be an ORM assignment followed by a commit.
@@ -1488,6 +1525,20 @@ def live_stop(code):
         db.close()
 
 
+def _page_id(page):
+    """A short name for the teacher's page, so a poll can leave it out.
+
+    The student sends back the one they are showing (`pg`), and the page is
+    included only when that is not this one. "" for no page at all.
+    """
+    if not page:
+        return ""
+    return hashlib.sha1(page.encode("utf-8")).hexdigest()[:16]
+
+
+app.jinja_env.globals["live_page_id"] = _page_id
+
+
 @app.get("/api/live/<code>")
 def live_poll(code):
     """What the class asks for, once a second, all lesson.
@@ -1511,6 +1562,8 @@ def live_poll(code):
 
         if seen == live.version and not live.ended:
             return ("", 304)
+        page_id = _page_id(live.page)
+        shown = request.args.get("pg", "")
         return jsonify(
             version=live.version,
             body=live.body,
@@ -1519,6 +1572,14 @@ def live_poll(code):
             host=live.host_name,
             ended=bool(live.ended),
             notes=live.notes or "",
+            slide=live.slide or "",
+            output=live.output or "",
+            page_id=page_id,
+            # Only to a student who does not already have this page. Every
+            # keystroke the teacher types moves `version`, and resending a
+            # whole built page with each one would be thirty students pulling
+            # hundreds of kilobytes a second for a page that has not changed.
+            **({"page": live.page or ""} if shown != page_id else {}),
         )
     finally:
         db.close()

@@ -406,6 +406,8 @@
     }
     seen = data.version;
     showNotes(data);
+    showTeacherPage(data, data.initial);
+    showTeacherOutput(data);
   }
 
   /* The project's notes, in their own pane under the console. Re-rendered
@@ -416,12 +418,116 @@
   var notesBody = $("live-notes");
   var shownNotes = null;
 
+  var slideMark = $("live-slide");
+  var shownSlide = null;
+
+  /* Slides need nothing special here. When the teacher's notes are cut into
+     slides, `notes` is only the current one — the editor does the cutting —
+     and `slide` says where it is ("3/5"). A new slide is new notes, so it
+     renders through the same path; all this adds is the marker, and going
+     back to the top, because the last slide's scroll position means nothing
+     on the next one and a class would start reading it halfway down. */
   function showNotes(data) {
     if (!notesView || typeof data.notes !== "string") return;
-    if (data.notes === shownNotes) return;
+    var slide = typeof data.slide === "string" ? data.slide : "";
+    if (data.notes === shownNotes && slide === shownSlide) return;
+    var moved = slide !== shownSlide;
     shownNotes = data.notes;
+    shownSlide = slide;
+    if (slideMark) {
+      var m = slide.match(/^(\d+)\/(\d+)$/);
+      slideMark.textContent = m ? "Slide " + m[1] + " of " + m[2] : "";
+    }
     notesView.hidden = !data.notes.trim();
-    if (!notesView.hidden) window.WebIDENotes.render(notesBody, data.notes);
+    if (notesView.hidden) return;
+    window.WebIDENotes.render(notesBody, data.notes).then(function () {
+      if (moved) notesBody.scrollTop = 0;
+    });
+  }
+
+  // ------------------------------------------- what the teacher's Run made
+
+  /* The teacher's page and console, each beside the student's own and never
+     in it. The student's frame and console are theirs exactly as their
+     editor is; these get their own elements and nothing here touches
+     `frame` or `outputEl`.
+
+     A new page is the teacher pressing Run and wanting the class to look,
+     so both tabs come to the front. Console lines alone do not move
+     anything — the teacher's page logs as they click around in it, and
+     flipping a student's pane on every click would make their own console
+     unreadable — they only mark the tab when it is not showing. */
+  var teacherFrame = $("teacher-preview");
+  var teacherOut = $("teacher-output");
+  var pageMineTab = $("page-mine");
+  var pageTeacherTab = $("page-teacher");
+  var mineTab = $("out-mine");
+  var teacherTab = $("out-teacher");
+  var clearBtn = $("clear");
+  var shownPageId = "";
+  var shownOutput = null;
+
+  function showTeachers(on) {
+    if (!teacherFrame) return;
+    teacherFrame.hidden = !on;
+    frame.hidden = on;
+    pageMineTab.classList.toggle("is-on", !on);
+    pageTeacherTab.classList.toggle("is-on", on);
+    showConsoleTab(on);
+  }
+
+  function showConsoleTab(on) {
+    if (!teacherOut) return;
+    teacherOut.hidden = !on;
+    outputEl.hidden = on;
+    mineTab.classList.toggle("is-on", !on);
+    teacherTab.classList.toggle("is-on", on);
+    if (on) teacherTab.classList.remove("has-new");
+    clearBtn.hidden = on;                     // Clear is for their own
+  }
+
+  /* Set only when the page itself changes. The poll leaves `page` out when
+     the student already has it (see live_poll), and re-setting it anyway
+     would restart the teacher's page on thirty screens every second.
+     Replaced as an element rather than re-pointed, like the student's own:
+     a teacher's page stuck in a loop wedges its frame, and only a new one
+     gets the next Run on screen. */
+  function showTeacherPage(data, quietly) {
+    if (!teacherFrame || typeof data.page !== "string") return;
+    var id = data.page_id || "";
+    if (id === shownPageId) return;
+    shownPageId = id;
+    var next = document.createElement("iframe");
+    next.id = "teacher-preview";
+    next.title = "Your teacher's page";
+    next.setAttribute("sandbox", "allow-scripts allow-forms");
+    next.hidden = teacherFrame.hidden;
+    teacherFrame.parentNode.replaceChild(next, teacherFrame);
+    teacherFrame = next;
+    if (!data.page) return;
+    teacherFrame.srcdoc = data.page;
+    pageTeacherTab.hidden = false;
+    teacherTab.hidden = false;
+    if (!quietly) showTeachers(true);
+  }
+
+  function showTeacherOutput(data) {
+    if (!teacherOut || typeof data.output !== "string") return;
+    if (data.output === shownOutput) return;
+    var first = shownOutput === null;
+    shownOutput = data.output;
+    teacherOut.textContent = data.output;
+    teacherOut.scrollTop = teacherOut.scrollHeight;
+    if (!data.output) return;
+    teacherTab.hidden = false;
+    if (!first && teacherOut.hidden) teacherTab.classList.add("has-new");
+  }
+
+  if (teacherFrame) {
+    pageMineTab.addEventListener("click", function () { showTeachers(false); });
+    pageTeacherTab.addEventListener("click", function () { showTeachers(true); });
+    mineTab.addEventListener("click", function () { showConsoleTab(false); });
+    teacherTab.addEventListener("click", function () { showConsoleTab(true); });
   }
 
   function setState(text, kind) {
@@ -432,14 +538,19 @@
 
   if (typeof L.body === "string") {
     showMirror({ body: L.body, version: L.version, filename: L.filename,
-                 notes: L.notes });
+                 notes: L.notes, slide: L.slide, output: L.output,
+                 page: L.page, page_id: L.pageId,
+                 // joining mid-lesson: offer the teacher's page, but leave
+                 // the student looking at their own until the teacher runs
+                 initial: true });
   }
 
   var POLL_MS = 1000;
   var misses = 0;
 
   function poll() {
-    fetch("/api/live/" + encodeURIComponent(L.code) + "?v=" + seen,
+    fetch("/api/live/" + encodeURIComponent(L.code) + "?v=" + seen
+          + "&pg=" + encodeURIComponent(shownPageId),
           { cache: "no-store" })
       .then(function (res) {
         if (res.status === 304) {         // the usual answer: nothing new
@@ -517,6 +628,10 @@
     next.id = "preview";
     next.title = "Page preview";
     next.setAttribute("sandbox", "allow-scripts allow-forms");
+    /* Stop makes a new frame too, and it must stay behind the teacher's
+       page if that is the tab in front — a fresh element is visible by
+       default, and the two would stack in one pane. */
+    next.hidden = frame.hidden;
     frame.parentNode.replaceChild(next, frame);
     frame = next;
     return next;
@@ -524,6 +639,7 @@
 
   function run() {
     var source = mine.getValue();          // theirs, never the mirror's
+    showTeachers(false);                   // their Run, their page
     clearOutput();
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
     var entry = window.WebIDERun.ENTRY;

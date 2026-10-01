@@ -164,21 +164,46 @@
     {#  The student's own page, rendered. Same sandboxed frame the editor
         uses — no same-origin access, so nothing they write can reach this
         page or the lesson. #}
+    {#  Their page and the teacher's share one pane, as two tabs. The
+        teacher's tab appears the first time they press Run and comes to
+        the front each time they run again; pressing Run here goes back to
+        the student's own.
+
+        TWO FRAMES, NEVER ONE, and the teacher's is sandboxed exactly like
+        theirs — scripts and forms, never same-origin — so the teacher's page
+        cannot reach this one either. It posts its console messages to this
+        window like any preview does, and they are dropped: the listener
+        below only hears the student's own frame. #}
     <div id="preview-view" class="subpane">
-      <div class="pane-head"><span>Your page</span></div>
+      <div class="pane-head">
+        <span class="out-tabs">
+          <button id="page-mine" class="out-tab is-on" type="button">Your page</button>
+          <button id="page-teacher" class="out-tab" type="button" hidden
+                  title="The page {{ live.host_name or 'your teacher' }} last ran">{{ live.host_name or "Teacher" }}'s page</button>
+        </span>
+      </div>
       <div class="preview-wrap">
         <iframe id="preview" title="Page preview"
                 sandbox="allow-scripts allow-forms"></iframe>
+        <iframe id="teacher-preview" title="Your teacher's page"
+                sandbox="allow-scripts allow-forms" hidden></iframe>
       </div>
     </div>
 
     <div id="output-view" class="subpane live-console">
+      {#  Same two tabs for the console, and two <pre>s for the same reason
+          as the frames: nothing from the network is written into theirs. #}
       <div class="pane-head">
-        <span>Console</span>
+        <span class="out-tabs">
+          <button id="out-mine" class="out-tab is-on" type="button">Console</button>
+          <button id="out-teacher" class="out-tab" type="button" hidden
+                  title="What {{ live.host_name or 'your teacher' }}'s page logged">{{ live.host_name or "Teacher" }}'s console</button>
+        </span>
         <button id="clear" class="linkbtn">Clear</button>
       </div>
       <pre id="output" class="output"><span class="dim">Press Run to see your page.</span>
 </pre>
+      <pre id="teacher-output" class="output" hidden></pre>
     </div>
 
     {#  The project's notes, always in view — not only while the teacher has
@@ -186,7 +211,8 @@
         opens every link in a new tab, so thirty students clicking a link at
         once lose nothing. Hidden when the project has no notes. #}
     <div id="live-notes-view" class="subpane live-notes" hidden>
-      <div class="pane-head"><span>Notes</span></div>
+      <div class="pane-head"><span>Notes</span>
+        <span id="live-slide" class="dim" aria-live="polite"></span></div>
       <div id="live-notes" class="notes-body prose"></div>
     </div>
   </section>
@@ -203,6 +229,10 @@
     filename: {{ (live.filename if live else 'main.py') | tojson }},
     ended: {{ 'true' if (live and live.ended) else 'false' }},
     notes: {{ (live.notes if live else '') | tojson }},
+    slide: {{ (live.slide if live else '') | tojson }},
+    output: {{ (live.output if live else '') | tojson }},
+    page: {{ (live.page if live else '') | tojson }},
+    pageId: {{ (live_page_id(live.page) if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},
     signedIn: {{ 'true' if user else 'false' }},
     assignment: {{ (assignment.slug if assignment else '') | tojson }},

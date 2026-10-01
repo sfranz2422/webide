@@ -993,3 +993,45 @@ body:not(.is-authoring) .notes-body a {
   border-top: 1px solid var(--line);
 }
 .live-right .live-notes[hidden] { display: none; }
+
+/* Slides, on the teacher's bar while live: ◀ 3 / 5 ▶. */
+.slide-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.slide-ctl[hidden] { display: none; }
+.slide-ctl .btn { padding-left: 8px; padding-right: 8px; }
+.slide-at {
+  min-width: 44px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The student's output and the teacher's, as two tabs in one pane head.
+ * Styled like the head's own label so the pane does not look busier than it
+ * did with one; the one in front is the one in full colour. */
+.out-tabs { display: inline-flex; gap: 14px; }
+.out-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 2px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.out-tab:hover { color: var(--text); }
+.out-tab.is-on { color: var(--text); border-bottom-color: var(--accent); }
+/* Changed while the student's own program was running, so it did not jump
+ * to the front; a dot says there is something new behind it. */
+.out-tab.has-new::after { content: " •"; color: var(--accent); }
+
+/* Two frames in one pane — the student's page and the teacher's — and the
+ * `.preview-wrap iframe` rule gives every frame display:block, which
+ * beats [hidden]. */
+.preview-wrap iframe[hidden] { display: none; }

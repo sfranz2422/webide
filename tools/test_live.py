@@ -238,6 +238,98 @@ check("a project with no notes clears them",
       poll_json().get("notes") == "", repr(poll_json().get("notes")))
 
 
+# ---------------------------------------- slides, console and page
+print("\nSlides, and what the teacher's Run made")
+
+base = poll_json()
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": base.get("body"), "filename": base.get("filename"),
+                       "notes": "## Two", "slide": "2/4",
+                       "output": "clicked\n", "page": "<h1>Teacher</h1>",
+                       "seq": 4400})
+got = poll_json()
+check("the slide a push names reaches the class",
+      r.status_code == 200 and got.get("slide") == "2/4", repr(got.get("slide")))
+check("  and so does the teacher's console",
+      got.get("output") == "clicked\n", repr(got.get("output")))
+check("  and the page their Run built",
+      got.get("page") == "<h1>Teacher</h1>" and got.get("page_id"),
+      repr(got.get("page")))
+
+# THE POLL LEAVES THE PAGE OUT for a student who has it: every keystroke
+# moves the version, and a whole page on every one would be thirty students
+# pulling it again and again for nothing.
+pid = got.get("page_id")
+same = stranger.get("/api/live/%s?v=-1&pg=%s" % (CODE, pid)).get_json()
+check("a student who already has the page is not sent it again",
+      "page" not in same and same.get("page_id") == pid, sorted(same))
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "typing on", "seq": 4401})
+got = poll_json()
+check("a push from an older editor leaves all three alone",
+      got.get("slide") == "2/4" and got.get("output") == "clicked\n"
+      and got.get("page") == "<h1>Teacher</h1>",
+      "an old tab would wipe them every 400ms")
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "x", "slide": "<b>9</b>", "seq": 4402})
+check("a slide that is not N/M is stored as none",
+      poll_json().get("slide") == "", repr(poll_json().get("slide")))
+
+# A console.log in a loop. Refusing it would take the code down with it,
+# and the mirror would freeze for as long as the loop ran.
+flood = "".join("line %d\n" % i for i in range(20000))
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": "while (true) console.log(1)", "output": flood,
+                       "seq": 4403})
+got = poll_json()
+check("a huge console is trimmed, not refused",
+      r.status_code == 200 and got.get("body") == "while (true) console.log(1)",
+      r.status_code)
+check("  keeping the end of it, which is the part anyone reads",
+      got.get("output", "").endswith("line 19999\n")
+      and len(got["output"].encode()) <= W.LIVE_OUTPUT_BYTES,
+      len(got.get("output", "")))
+
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": "big page", "page": "x" * (W.LIVE_PAGE_BYTES + 1),
+                       "seq": 4404})
+# asked as a student still showing the earlier page, who must be told
+got = stranger.get("/api/live/%s?v=-1&pg=%s" % (CODE, pid)).get_json()
+check("an oversized page is dropped, and the code still lands",
+      r.status_code == 200 and got.get("body") == "big page"
+      and got.get("page") == "" and got.get("page_id") == "",
+      (r.status_code, got.get("body"), len(got.get("page") or ""),
+       got.get("page_id")))
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "x", "slide": "3/5", "output": "hi\n",
+                   "page": "<p>hi</p>", "seq": 4405})
+again = teacher.post("/api/live/start", json={"body": "x"}).get_json()
+check("a reload is told which slide the class is on",
+      again.get("slide") == "3/5", repr(again.get("slide")))
+page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+check("a late joiner gets all three in the page",
+      re.search(r'^\s*slide: "3/5"', page, re.M) is not None
+      and re.search(r'^\s*output: "hi\\n"', page, re.M) is not None
+      and re.search(r'^\s*page: "\\u003cp\\u003ehi', page, re.M) is not None
+      and re.search(r'^\s*pageId: "%s"' % W._page_id("<p>hi</p>"), page, re.M)
+      is not None)
+check("  with a slide marker, and tabs for the teacher's page and console",
+      'id="live-slide"' in page and 'id="page-teacher"' in page
+      and 'id="out-teacher"' in page and 'id="teacher-output"' in page)
+_tf = re.search(r'<iframe id="teacher-preview"[^>]*>', page)
+check("  the teacher's page in a frame sandboxed like theirs",
+      _tf is not None and 'sandbox="allow-scripts allow-forms"' in _tf.group(0)
+      and "same-origin" not in _tf.group(0),
+      _tf.group(0) if _tf else "no frame")
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": base.get("body"), "filename": base.get("filename"),
+                   "notes": "", "slide": "", "output": "", "page": "",
+                   "seq": 4500})
+
+
 # -------------------------------------------------------------- the pages
 print("\nThe pages")
 
@@ -975,7 +1067,8 @@ check("  and a change to the notes alone is pushed",
       re.search(r"var stamp = [^;]*\bnotes\b", _push_fn) is not None,
       "editing the notes with another file open would reach nobody")
 check("  and they are the project's first .md",
-      re.search(r"function liveNotes\(\)[\s\S]{0,200}fileNames\(\)\.filter\(window\.WebIDENotes\.isMarkdown\)[\s\S]{0,80}md\[0\]", _push) is not None)
+      re.search(r"function notesFile\(\)[\s\S]{0,200}fileNames\(\)\.filter\(window\.WebIDENotes\.isMarkdown\)[\s\S]{0,80}md\[0\]", _push) is not None
+      and re.search(r"function liveNotes\(\)\s*\{\s*var md = notesFile\(\);", _push) is not None)
 _mirror_fn = live_code[live_code.index("function showMirror"):]
 _mirror_fn = _mirror_fn[:_mirror_fn.index("\n  }\n")]
 check("the live page shows them on every update, not only the first",
@@ -986,8 +1079,124 @@ check("  and on the page's first paint, before any poll",
 _notes_fn = live_code[live_code.index("function showNotes"):]
 _notes_fn = _notes_fn[:_notes_fn.index("\n  }\n")]
 check("  re-rendering only when they change",
-      "if (data.notes === shownNotes) return;" in _notes_fn,
+      "if (data.notes === shownNotes && slide === shownSlide) return;" in _notes_fn,
       "a re-render every second replaces the link a student is clicking")
+
+# ------------------------------------------- slides and the teacher's Run
+def fn_body(js, name):
+    i = js.find("function " + name + "(")
+    if i < 0:
+        return ""
+    return js[i:js.index("\n  }\n", i)]
+
+_tpage = fn_body(live_code, "showTeacherPage")
+_tout = fn_body(live_code, "showTeacherOutput")
+check("the teacher's page goes only into its own frame",
+      "teacherFrame.srcdoc = data.page" in _tpage
+      and not re.search(r"\bframe\.srcdoc|\bframe = ", _tpage)
+      and not re.search(r"(?<!teacherFrame)\.srcdoc = data\.page", live_code.replace("teacherFrame.srcdoc = data.page", "")),
+      "the student's own preview must never be given it")
+check("  set only when the page itself changes",
+      re.search(r"if \(id === shownPageId\) return;", _tpage) is not None,
+      "re-setting it would restart the teacher's page every second")
+check("  and the poll says which page it has",
+      re.search(r'"&pg=" \+ encodeURIComponent\(shownPageId\)', live_code)
+      is not None)
+check("  joining mid-lesson offers it without taking over their pane",
+      re.search(r"if \(!quietly\) showTeachers\(true\);", _tpage) is not None
+      and re.search(r"showTeacherPage\(data, data\.initial\)", live_code)
+      is not None)
+check("the teacher's console is written only into its own pane",
+      "teacherOut.textContent = data.output" in _tout
+      and not re.search(r"outputEl[^;]*data\.output|write\(data\.output",
+                        live_code))
+check("  and its lines alone never pull the pane over",
+      "showConsoleTab(true)" not in _tout and "showTeachers(true)" not in _tout)
+check("their own Run brings their own page back",
+      re.search(r"function run\(\)[\s\S]{0,200}showTeachers\(false\)",
+                live_code) is not None)
+check("Stop's fresh frame stays behind the teacher's page",
+      "next.hidden = frame.hidden;" in fn_body(live_code, "freshFrame"),
+      "the two frames would stack in one pane")
+# The teacher's frame posts console messages to this window like any preview.
+# The listener must drop them — they carry the teacher's token, not this
+# page's, and come from a different frame.
+_listen = live_code[live_code.index('addEventListener("message"'):]
+_listen = _listen[:_listen.index("\n  });")]
+check("messages from the teacher's frame are not written to theirs",
+      "data.webide !== token" in _listen
+      and "e.source !== frame.contentWindow" in _listen
+      and "teacherFrame" not in _listen)
+
+check("the editor sends slide, console and page with every push",
+      "slide: slide, output: output, page: page" in _push_fn
+      and re.search(r"var stamp = [^;]*\bslide\b[^;]*\boutput\b[^;]*\bpage\b",
+                    _push_fn) is not None,
+      "moving a slide, or a Run, would otherwise reach nobody")
+check("  only the current slide goes out as the notes",
+      "notes = cut[slideAt];" in _push_fn)
+check("  and the notes tab, if open, mirrors that slide, not the file",
+      "if (name === notesFile()) text = notes;" in _push_fn)
+check("  and no console is sent before the first Run",
+      re.search(r"function liveOutput\(\)\s*\{\s*if \(!hasRun\) return \"\";",
+                _push) is not None)
+check("  and the page sent is Run's, not every auto-refresh",
+      "var page = sharedPage;" in _push_fn
+      and re.search(r"function run\(\)\s*\{[^}]*sharedPage = lastBuilt;[^}]*hasRun = true;",
+                    _push) is not None
+      and "sharedPage =" not in fn_body(_push, "render"),
+      "thirty panes would jump to a half-typed page on every pause")
+check("  and the editor's first paint is not a Run",
+      re.search(r"show something straight away[^\n]*\n(\s*//[^\n]*\n)*\s*render\(ENTRY\);",
+                app_js) is not None,
+      "every lesson would send the page before the teacher pressed anything")
+
+import json
+import shutil
+import subprocess
+notes_js = open(os.path.join(WEBIDE, "static", "notes.js")).read()
+if shutil.which("node"):
+    sample = (
+        "# Looping Over a List\n\n---\n\n## for Each Item\n\n"
+        "```css\n## not a slide\nh1 { color: red; }\n```\n\n"
+        "```text\n---\n```\n\n---\n\n"
+        "## enumerate()\n\nPosition and item.\n\n---\n\n"
+        "### still enumerate\n\n---\n\n"
+        "## ✏ Mini Assignment\n\n> Extension\n")
+    harness = "var window = {};\n" + notes_js + """
+var N = window.WebIDENotes;
+console.log(JSON.stringify({
+  cut: N.slides(%s),
+  none: N.slides("# Just notes\\n\\nNo sections here."),
+  crlf: N.slides("## A\\r\\nx\\r\\n---\\r\\n## B\\r\\ny")
+}));
+""" % json.dumps(sample)
+    res = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    try:
+        got = json.loads(res.stdout)
+    except ValueError:
+        got = {}
+    cut = got.get("cut") or []
+    check("notes split into a title and one slide per ## heading",
+          len(cut) == 4 and cut[0] == "# Looping Over a List"
+          and cut[1].startswith("## for Each Item")
+          and cut[3].startswith("## ✏ Mini Assignment"),
+          repr([c[:20] for c in cut] or res.stderr[-200:]))
+    check("  ## and --- inside a code fence do not cut it",
+          len(cut) > 1 and "## not a slide" in cut[1]
+          and "```text\n---\n```" in cut[1])
+    check("  the --- between slides is dropped from both sides",
+          all(not c.startswith("---") and not c.endswith("---") for c in cut))
+    check("  a ### stays inside its slide, rules and all",
+          len(cut) > 2 and cut[2].endswith("### still enumerate"),
+          repr(cut[2] if len(cut) > 2 else ""))
+    check("  notes with no ## are not slides at all",
+          got.get("none") == [], repr(got.get("none")))
+    check("  Windows line endings split the same way",
+          got.get("crlf") == ["## A\nx", "## B\ny"], repr(got.get("crlf")))
+else:
+    check("node is available to run the slide splitter", False,
+          "brew install node")
 
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"

@@ -431,6 +431,7 @@
      submitted, so the page it lands on can say something about it. */
   function render(name, sent) {
     var files = allFiles();
+    lastBuilt = "";
     if (!files[ENTRY]) {
       write("\nThere's no " + ENTRY + " to open.\n", "err");
       return;
@@ -444,6 +445,7 @@
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
     var built = window.WebIDERun.assemble(files, token, page, sent);
     offsets = built.offsets;
+    lastBuilt = built.html;
 
     lastRun = signature(files);
     // Running again is how a student says "carry on" after a Stop.
@@ -460,9 +462,25 @@
      "Run shows me my homepage" is one less rule to remember. Auto-refresh is
      the opposite: it updates whatever is on screen, because being thrown back
      to the homepage every time you edit your About page would be unusable. */
+  /* What a live lesson shows the class of this page. `lastBuilt` is every
+     render — auto-refresh and clicking through pages included — and
+     `sharedPage` is only what Run made. The class is sent the second: the
+     preview re-renders on every pause in typing, and each of those pulling
+     thirty students' panes over to a half-typed page would be a lesson
+     nobody could follow. Pressing Run is the teacher saying "look".
+
+     `hasRun` likewise: until Run is pressed, the console holds only "Page
+     loaded" and nothing is sent at all. That is also why the page's own
+     first paint, below, is a render and not a run. */
+  var lastBuilt = "";
+  var sharedPage = "";
+  var hasRun = false;
+
   function run() {
     trail = [];
     render(ENTRY);
+    sharedPage = lastBuilt;
+    hasRun = true;
   }
 
   /* Follow a link or a form's action to another of the student's pages. */
@@ -888,8 +906,9 @@
     }
   });
 
-  // show something straight away rather than an empty white rectangle
-  run();
+  // show something straight away rather than an empty white rectangle —
+  // render, not run: nobody has pressed Run yet (see sharedPage)
+  render(ENTRY);
   // ------------------------------------------------------------ teach live
   //
   // Go live and carry on working. Whatever file is open here is what the
@@ -932,9 +951,64 @@
     /* The project's notes: its first .md, the same one a student opening the assignment link is shown first. Sent on every push so the class keeps
        them beside the lesson whichever tab is open here — before this, they
        reached the class only while the .md tab was selected. */
-    function liveNotes() {
+    function notesFile() {
       var md = fileNames().filter(window.WebIDENotes.isMarkdown);
-      return md.length ? docs[md[0]].getValue() : "";
+      return md.length ? md[0] : null;
+    }
+
+    function liveNotes() {
+      var md = notesFile();
+      return md ? docs[md].getValue() : "";
+    }
+
+    /* ------------------------------------------------------------ slides
+       Notes with `## ` headings are slides, and the class is sent ONE: the
+       one this teacher is on. Here the whole file stays in the editor, as
+       ever. The cutting happens in this browser, so the server stores and
+       students render exactly what they did before — the only new thing on
+       the wire is "3/5".
+
+       `slideAt` is an index that survives editing the notes mid-lesson, and
+       is clamped when slides are deleted out from under it. Two slides at
+       least, or it is not slides: a file with a single `## ` goes whole. */
+    var slideAt = 0;
+    var slideCtl = $("live-slides");
+    var slideLabel = $("slide-at");
+
+    function currentSlides() {
+      var cut = window.WebIDENotes.slides(liveNotes());
+      return cut.length >= 2 ? cut : null;
+    }
+
+    function paintSlides(cut) {
+      if (!slideCtl) return;
+      slideCtl.hidden = !(liveCode && cut);
+      if (slideCtl.hidden) return;
+      slideLabel.textContent = (slideAt + 1) + " / " + cut.length;
+      $("slide-prev").disabled = slideAt <= 0;
+      $("slide-next").disabled = slideAt >= cut.length - 1;
+    }
+
+    function moveSlide(by) {
+      var cut = currentSlides();
+      if (!liveCode || !cut) return;
+      slideAt = Math.max(0, Math.min(cut.length - 1, slideAt + by));
+      pushNow();                 // now, not on the next tick
+    }
+
+    if (slideCtl) {
+      $("slide-prev").addEventListener("click", function () { moveSlide(-1); });
+      $("slide-next").addEventListener("click", function () { moveSlide(1); });
+    }
+
+    /* The tail of the console, once Run has been pressed. Trimmed here as
+       well as on the server, to keep a console.log in a loop from sending
+       200 KB every 400ms to thirty polls. */
+    var OUTPUT_CHARS = 16000;
+    function liveOutput() {
+      if (!hasRun) return "";
+      var text = outputEl.textContent || "";
+      return text.length > OUTPUT_CHARS ? text.slice(-OUTPUT_CHARS) : text;
     }
 
     function pushNow() {
@@ -942,13 +1016,28 @@
       var name = active;
       var text = docs[name] ? docs[name].getValue() : "";
       var notes = liveNotes();
-      var stamp = name + "\u0000" + text + "\u0000" + notes;
+      var slide = "";
+      var cut = currentSlides();
+      if (cut) {
+        slideAt = Math.min(slideAt, cut.length - 1);
+        notes = cut[slideAt];
+        slide = (slideAt + 1) + "/" + cut.length;
+        /* With the notes tab open, the mirror shows that file too — whole,
+           which would put every slide on screen at once and defeat the
+           point. It gets the current slide like the notes pane does. */
+        if (name === notesFile()) text = notes;
+      }
+      paintSlides(cut);
+      var output = liveOutput();
+      var page = sharedPage;
+      var stamp = [name, text, notes, slide, output, page].join("\u0000");
       if (stamp === lastSent) return;      // nothing typed since last time
       lastSent = stamp;
       fetch("/api/live/" + encodeURIComponent(liveCode) + "/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: text, filename: name, notes: notes,
+                               slide: slide, output: output, page: page,
                                seq: nextSeq() })
       }).then(function (res) {
         if (res.status === 403 || res.status === 409) stopLive(true);
@@ -970,6 +1059,7 @@
         liveBtn.textContent = "Go live";
         liveBtn.classList.remove("btn-live-on");
         liveChip.hidden = true;
+        paintSlides(null);
       }
     }
 
@@ -1087,6 +1177,10 @@
           liveCode = data.code;
           liveFor = data.assignment_title || "";
           lastVersion = data.version || 0;
+          // Back on the slide the class is looking at, after a reload. A
+          // fresh lesson has none and starts at the beginning.
+          var at = /^(\d+)\//.exec(data.slide || "");
+          slideAt = at ? Math.max(0, parseInt(at[1], 10) - 1) : 0;
           lastSent = null;
           try { localStorage.setItem("webide-live-host", liveCode); } catch (e) {}
           paintLive();
