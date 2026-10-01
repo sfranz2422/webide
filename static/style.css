@@ -1035,3 +1035,12 @@ body:not(.is-authoring) .notes-body a {
  * `.preview-wrap iframe` rule gives every frame display:block, which
  * beats [hidden]. */
 .preview-wrap iframe[hidden] { display: none; }
+
+/* The teacher's copy of the class's Notes pane, under the preview while
+ * live. A fixed share of the column, as on the student's page, so neither
+ * one can squeeze the other to nothing. */
+.pane-right .class-view {
+  flex: 1 1 45%;
+  border-top: 1px solid var(--line);
+}
+.pane-right .class-view[hidden] { display: none; }
