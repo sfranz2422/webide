@@ -784,7 +784,7 @@
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
-  var hideCode = $("hide-code");   // teachers only; absent for everyone else
+  var hideCode = $("hide-code");   // a teacher's, in the share-ask dialog
 
   /* Two kinds of link come out of one button, so the dialog has to say which
      one it just produced — an accidental tick is otherwise invisible until a
@@ -817,43 +817,65 @@
     });
   }
 
+  /* A teacher's Share opens share-ask first, to choose between a plain link
+     and a demo link; a student's goes straight to sharing. The box is
+     unticked every time the dialog opens, so a demo link is always a choice
+     made just now and never one left over from the last share. */
+  async function doShare(hidden) {
+    if (!authorField.value.trim()) {
+      flagAuthor("Put your name in the box at the top before sharing.");
+      return;
+    }
+    shareBtn.disabled = true;
+    var original = shareBtn.textContent;
+    shareBtn.textContent = "Sharing…";
+    try {
+      var res = await fetch(window.WEBIDE.shareUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: $("title").value,
+          author: authorField.value,
+          files: allFiles(),
+          hidden: !!hidden
+        })
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        if (data.field === "author") { flagAuthor(data.error); return; }
+        throw new Error(data.error || "Could not share this project.");
+      }
+      // the server decides, not the checkbox — they agree, but only one of
+      // them knows what actually got written
+      describeShare(!!data.hidden);
+      $("share-url").value = data.url;
+      $("modal").hidden = false;
+      $("share-url").select();
+    } catch (e) {
+      write("\nShare failed: " + e.message + "\n", "err");
+    } finally {
+      shareBtn.disabled = false;
+      shareBtn.textContent = original;
+    }
+  }
+
+  var shareAsk = $("share-ask");
   if (shareBtn) {
-    shareBtn.addEventListener("click", async function () {
-      if (!authorField.value.trim()) {
-        flagAuthor("Put your name in the box at the top before sharing.");
-        return;
-      }
-      shareBtn.disabled = true;
-      var original = shareBtn.textContent;
-      shareBtn.textContent = "Sharing…";
-      try {
-        var res = await fetch(window.WEBIDE.shareUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: $("title").value,
-            author: authorField.value,
-            files: allFiles(),
-            hidden: !!(hideCode && hideCode.checked)
-          })
-        });
-        var data = await res.json();
-        if (!res.ok) {
-          if (data.field === "author") { flagAuthor(data.error); return; }
-          throw new Error(data.error || "Could not share this project.");
-        }
-        // the server decides, not the checkbox — they agree, but only one of
-        // them knows what actually got written
-        describeShare(!!data.hidden);
-        $("share-url").value = data.url;
-        $("modal").hidden = false;
-        $("share-url").select();
-      } catch (e) {
-        write("\nShare failed: " + e.message + "\n", "err");
-      } finally {
-        shareBtn.disabled = false;
-        shareBtn.textContent = original;
-      }
+    shareBtn.addEventListener("click", function () {
+      if (!shareAsk) { doShare(false); return; }
+      if (hideCode) hideCode.checked = false;
+      shareAsk.hidden = false;
+      $("share-go").focus();
+    });
+  }
+  if (shareAsk) {
+    $("share-go").addEventListener("click", function () {
+      shareAsk.hidden = true;
+      doShare(!!(hideCode && hideCode.checked));
+    });
+    $("share-cancel").addEventListener("click", function () { shareAsk.hidden = true; });
+    shareAsk.addEventListener("click", function (e) {
+      if (e.target === shareAsk) shareAsk.hidden = true;
     });
   }
 
@@ -1111,13 +1133,41 @@
       });
     }
 
+    function liveLink() {
+      return location.origin + "/live/" + encodeURIComponent(liveCode);
+    }
+
+    /* The chip still reads as the code, which is what a teacher says out
+       loud; clicking it copies the whole address for the class's chat. The
+       label flashes "Link copied" and then goes back to the code — unless the
+       lesson ended in the meantime, when paintLive has already moved on. */
+    liveChip.addEventListener("click", function () {
+      if (!liveCode) return;
+      var link = liveLink();
+      function flash(text) {
+        var code = liveCode;
+        liveChip.textContent = text;
+        setTimeout(function () {
+          if (liveCode === code) liveChip.textContent = code;
+        }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(function () {
+          flash("Link copied");
+        }, function () { window.prompt("Copy this link for your class:", link); });
+      } else {
+        window.prompt("Copy this link for your class:", link);
+      }
+    });
+
     function paintLive() {
       if (liveCode) {
         liveBtn.textContent = "End lesson";
         liveBtn.classList.add("btn-live-on");
         liveChip.hidden = false;
         liveChip.textContent = liveCode;
-        liveChip.title = "Your class joins at /live and types " + liveCode
+        liveChip.title = "Click to copy the class's link: " + liveLink()
+          + "\n(or they go to /live and type " + liveCode + ")"
           + (liveFor ? "\nThey can turn in to: " + liveFor
                      : "\nNo assignment, so they cannot turn work in.");
       } else {
