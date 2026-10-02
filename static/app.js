@@ -775,12 +775,6 @@
 
   editor.on("change", function () { account.noteEdit(); });
 
-  $("close-projects").addEventListener("click", function () {
-    $("projects-modal").hidden = true;
-  });
-  $("projects-modal").addEventListener("click", function (e) {
-    if (e.target === $("projects-modal")) $("projects-modal").hidden = true;
-  });
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
@@ -826,9 +820,12 @@
       flagAuthor("Put your name in the box at the top before sharing.");
       return;
     }
-    shareBtn.disabled = true;
-    var original = shareBtn.textContent;
-    shareBtn.textContent = "Sharing…";
+    // Pressed from the account menu there is no Share on the bar to show
+    // "Sharing…" on, and a stand-in keeps the lines below from caring.
+    var btn = shareBtn || document.createElement("button");
+    btn.disabled = true;
+    var original = btn.textContent;
+    btn.textContent = "Sharing…";
     try {
       var res = await fetch(window.WEBIDE.shareUrl, {
         method: "POST",
@@ -854,8 +851,8 @@
     } catch (e) {
       write("\nShare failed: " + e.message + "\n", "err");
     } finally {
-      shareBtn.disabled = false;
-      shareBtn.textContent = original;
+      btn.disabled = false;
+      btn.textContent = original;
     }
   }
 
@@ -867,6 +864,11 @@
       shareAsk.hidden = false;
       $("share-go").focus();
     });
+  }
+  // A signed-in student's Share, out of the way in the account menu: they
+  // have Save or Turn in on the bar, and that is the one thing to press.
+  if ($("share-menu")) {
+    $("share-menu").addEventListener("click", function () { doShare(false); });
   }
   if (shareAsk) {
     $("share-go").addEventListener("click", function () {
@@ -899,9 +901,9 @@
      keep real relative links rather than being inlined, so
      <link href="style.css"> resolves against the folder just as it resolved
      against this server in the preview. */
-  /* Download sits in the toolbar for a signed-out student and in the account
-     menu for a signed-in one, so take whichever is actually on the page. */
-  var downloadBtn = $("download") || $("download-menu");
+  /* Download sits in the account menu for a signed-in student, in the
+     dialog Share opens for a signed-out one, and on the bar only when there
+     is no sign-in at all — so bind every one that is actually on the page. */
 
   function projectFileName() {
     var base = ($("title").value || "project")
@@ -909,23 +911,26 @@
     return (base || "project") + ".zip";
   }
 
-  if (downloadBtn) downloadBtn.addEventListener("click", function () {
-    var files = allFiles();
-    var entries = Object.keys(files).sort().map(function (name) {
-      return { name: name, data: files[name] };
+  ["download", "download-menu", "download-share"].forEach(function (id) {
+    var downloadBtn = $(id);
+    if (downloadBtn) downloadBtn.addEventListener("click", function () {
+      var files = allFiles();
+      var entries = Object.keys(files).sort().map(function (name) {
+        return { name: name, data: files[name] };
+      });
+
+      var original = downloadBtn.textContent;
+      downloadBtn.disabled = true;
+
+      try {
+        window.WebIDEZip.download(projectFileName(), entries);
+      } catch (e) {
+        write("\nCould not build the download: " + e.message + "\n", "err");
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = original;
+      }
     });
-
-    var original = downloadBtn.textContent;
-    downloadBtn.disabled = true;
-
-    try {
-      window.WebIDEZip.download(projectFileName(), entries);
-    } catch (e) {
-      write("\nCould not build the download: " + e.message + "\n", "err");
-    } finally {
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = original;
-    }
   });
 
   // show something straight away rather than an empty white rectangle —
