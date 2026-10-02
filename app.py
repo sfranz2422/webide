@@ -608,6 +608,9 @@ def _draft_payload(db, draft, extra=None):
         slug=None,
         shared_at=None,
         draft_slug=draft.slug,
+        # Where this tab starts: every save says it, and the server refuses
+        # one from a tab another tab has overtaken.
+        draft_version=draft.version or 0,
     )
     # HAS THIS COPY BEEN WORKED ON YET?
     #
@@ -698,6 +701,44 @@ def start_draft():
         db.close()
 
 
+STALE_TAB = ("This was changed in another tab or window, so this one has "
+             "stopped saving to keep that work safe. Reload this page to carry "
+             "on from the latest version.")
+
+
+def _stale(draft, data):
+    """A 409 if this write comes from a tab that has fallen behind, else None.
+
+    Behind means: the draft has been written since the version this tab last
+    saw, and not by this tab. See Draft.version in accounts.py for why.
+
+    A request with no `base` or `tab` is from a page loaded before this guard
+    existed — an open tab during the deploy — and is let through as before,
+    rather than stranding a student mid-sentence on the day it ships.
+
+    Read then written, not one conditional UPDATE: the race it leaves is two
+    tabs saving within the same few milliseconds, which a person with two
+    tabs cannot do. The race it closes is minutes wide.
+    """
+    base, tab = data.get("base"), data.get("tab")
+    if base is None or not isinstance(tab, str) or not tab:
+        return None
+    try:
+        base = int(base)
+    except (TypeError, ValueError):
+        return None
+    if base != (draft.version or 0) and draft.writer != tab[:24]:
+        return jsonify(error=STALE_TAB, stale=True), 409
+    return None
+
+
+def _written(draft, data):
+    """Stamp a write: the next version, and which tab made it."""
+    draft.version = (draft.version or 0) + 1
+    tab = data.get("tab")
+    draft.writer = tab[:24] if isinstance(tab, str) else ""
+
+
 @app.post("/api/draft/<slug>")
 def save_draft(slug):
     """Autosave. Called a moment after the student stops typing."""
@@ -716,11 +757,17 @@ def save_draft(slug):
         if file_error:
             return jsonify(error=file_error), 400
 
+        stale = _stale(draft, data)
+        if stale:
+            return stale
+
         draft.files = json.dumps(files)
         draft.title = clean(data.get("title"), 200) or draft.title
         draft.updated_at = accounts.now()
+        _written(draft, data)
         db.commit()
-        return jsonify(saved_at=draft.updated_at.strftime("%I:%M %p"))
+        return jsonify(saved_at=draft.updated_at.strftime("%I:%M %p"),
+                       version=draft.version)
     finally:
         db.close()
 
@@ -1153,9 +1200,16 @@ def turn_in():
         if file_error:
             return jsonify(error=file_error), 400
 
+        # A tab that has fallen behind must not hand in its stale copy — nor
+        # write it over the newer one, which is what the line after this did.
+        stale = _stale(draft, data)
+        if stale:
+            return stale
+
         # keep the draft in step, so the saved copy matches what was submitted
         draft.files = json.dumps(files)
         draft.updated_at = accounts.now()
+        _written(draft, data)
 
         snap = Project(
             slug=new_slug(db),
@@ -1179,7 +1233,7 @@ def turn_in():
         db.commit()
         return jsonify(ok=True,
                        submitted_at=row.submitted_at.strftime("%b %d at %I:%M %p"),
-                       again=row.times_submitted > 1)
+                       again=row.times_submitted > 1, version=draft.version)
     finally:
         db.close()
 
@@ -1848,14 +1902,19 @@ def live_keep(code):
             )
             db.add(draft)
         else:
+            stale = _stale(draft, data)
+            if stale:
+                return stale
             keep = files if files is not None else draft.file_map()
             keep[ENTRY] = source
             draft.files = json.dumps(keep)
             draft.updated_at = accounts.now()
+        _written(draft, data)
 
         db.commit()
         return jsonify(
             slug=draft.slug,
+            version=draft.version,
             url=url_for("open_draft", slug=draft.slug),
             assignment=(item.slug if item else ""),
             assignment_title=(item.title if item else ""),
@@ -1926,6 +1985,7 @@ def live_page(code):
         # their editor.
         starter = ""
         starter_files = {}
+        draft_version = None
         if item is not None:
             source = item.file_map()
             if user is not None:
@@ -1933,6 +1993,7 @@ def live_page(code):
                     owner_id=user.id, assignment_id=item.id).first()
                 if mine is not None:
                     source = mine.file_map()
+                    draft_version = mine.version or 0
             starter = source.get(ENTRY, "")
             starter_files = {n: b for n, b in source.items() if n != ENTRY}
 
@@ -1946,6 +2007,7 @@ def live_page(code):
             submitted_at=submitted_at,
             starter=starter,
             starter_files=starter_files,
+            draft_version=draft_version,
             error="",
         )
         return render_template("live.html", **ctx)

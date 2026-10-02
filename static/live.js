@@ -336,6 +336,41 @@
     draftSlug = window.localStorage.getItem(SLUG_KEY) || null;
   } catch (e) { /* they will press Save and get a fresh one */ }
 
+  /* TWO TABS, ONE DRAFT. Every write says which version of the draft this
+     tab last saw, and which tab it is; the server refuses it if another tab
+     has saved since. Without that, the Classroom link open in a forgotten
+     second tab wrote its old copy over this lesson's work the moment a key
+     was pressed in it. Refused, this tab stops saving and says so — the
+     other tab's copy is the one to keep. See Draft.version in accounts.py.
+
+     Unknown until the first save when the page had no draft to start from
+     (a lesson with no assignment), and then nothing is claimed: the first
+     reply carries the version, and the guard holds from there. */
+  var TAB = Math.random().toString(36).slice(2, 14);
+  var seen = typeof L.draftVersion === "number" ? L.draftVersion : null;
+  var stale = false;
+
+  function stamp(payload) {
+    if (seen !== null) { payload.base = seen; payload.tab = TAB; }
+    return payload;
+  }
+
+  function saw(data) {
+    if (data && typeof data.version === "number") seen = data.version;
+  }
+
+  function goneStale(message) {
+    if (stale) return;
+    stale = true;
+    if (saveState) {
+      saveState.hidden = false;
+      saveState.textContent = "Not saved — changed in another tab";
+    }
+    if (turnInBtn) turnInBtn.disabled = true;
+    window.alert(message + " What you typed here is still on screen, and in "
+                 + "this browser, so copy it first if you need it.");
+  }
+
   function savedNow(text) {
     if (!saveState) return;
     saveState.hidden = false;
@@ -361,7 +396,7 @@
      draft, so what the teacher sees on the dashboard is identical whichever
      way the student got there. */
   function turnIn() {
-    if (!canTurnIn) return;
+    if (!canTurnIn || stale) return;
     if (!window.confirm("Turn this in to " + (L.assignmentTitle || "your teacher")
                         + "? You can keep working and turn it in again.")) {
       return;
@@ -375,6 +410,7 @@
        page never showed — and that map is what goes in. */
     keep().then(function (saved) {
       if (!saved) {
+        if (stale) return;                // goneStale has said why
         turnInBtn.disabled = false;
         window.alert("Could not save before turning in. Try again.");
         return;
@@ -384,11 +420,13 @@
       return fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft: draftSlug, files: saved.files || {} })
+        body: JSON.stringify(stamp({ draft: draftSlug, files: saved.files || {} }))
       }).then(function (res) { return res.json(); })
         .then(function (data) {
+          if (data.stale) { goneStale(data.error); return; }
           turnInBtn.disabled = false;
           if (data.error) { window.alert(data.error); return; }
+          saw(data);
           turnInBtn.textContent = "Turn in again";
           savedNow("Turned in" + (data.submitted_at ? " " + data.submitted_at : ""));
         });
@@ -404,9 +442,13 @@
     return fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: mainSource(), files: allFiles() })
+      body: JSON.stringify(stamp({ code: mainSource(), files: allFiles() }))
     }).then(function (res) { return res.json(); })
-      .then(function (data) { return data && !data.error ? data : null; });
+      .then(function (data) {
+        if (data && data.stale) { goneStale(data.error); return null; }
+        if (data && !data.error) { saw(data); return data; }
+        return null;
+      });
   }
 
   if (turnInBtn) turnInBtn.addEventListener("click", turnIn);
@@ -424,7 +466,7 @@
      that would leave nothing on the My work page. */
   var pendingKeep = false;
   function keepQuietly() {
-    if (pendingKeep || draftSlug || !L.signedIn || !L.assignment) return;
+    if (stale || pendingKeep || draftSlug || !L.signedIn || !L.assignment) return;
     if (!mainSource().trim()) return;
     pendingKeep = true;
     keep().then(function (saved) {
@@ -450,14 +492,16 @@
     fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: JSON.stringify(stamp({
         code: text,                       // theirs, never the mirror's
         files: allFiles()
-      })
+      }))
     }).then(function (res) { return res.json(); })
       .then(function (data) {
         pendingSave = false;
+        if (data.stale) { goneStale(data.error); return; }
         if (data.error) { window.alert(data.error); return; }
+        saw(data);
         rememberDraft(data.slug);
         canTurnIn = !!data.can_turn_in;
         savedNow("Saved");
@@ -469,12 +513,13 @@
   }
 
   function autosave() {
+    if (stale) return;
     if (!draftSlug) { keepQuietly(); return; }
     if (!L.signedIn) return;
     fetch("/api/draft/" + encodeURIComponent(draftSlug), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: JSON.stringify(stamp({
         code: mainSource(),               // theirs, never the mirror's
         /* Every file, index.html included, because this route REPLACES them
            and refuses a map without index.html. It was sent `{}` once, when
@@ -483,7 +528,7 @@
            their project, while the page went on saying "Saved". */
         files: allFiles(),
         title: L.title || "Live lesson"
-      })
+      }))
     }).then(function (res) {
       if (res.status === 404) {
         /* The project was deleted from another tab, or from My projects.
@@ -499,6 +544,8 @@
       }
       return res.json();
     }).then(function (data) {
+      if (data && data.stale) { goneStale(data.error); return; }
+      saw(data);
       if (data && data.saved_at) savedNow("Saved " + data.saved_at);
     }).catch(function () {
       if (saveState) saveState.textContent = "Not saved — still in this browser";
