@@ -978,8 +978,41 @@
       write(String(data.text) + "\n", "err");
       return;
     }
+    /* Without this case the URL fell through to the line below and was
+       printed as if the page had logged it — a link that did nothing but
+       talk to the console. */
+    if (data.kind === "open") {
+      openExternal(String(data.text));
+      return;
+    }
     if (data.text !== undefined) write(String(data.text) + "\n");
   });
+
+  /* A link to another site, opened on the preview's behalf — the same as
+     app.js's openExternal. The frame has no allow-popups, on purpose, so it
+     asks and the tab is opened from here; the click inside it is what keeps
+     the browser from calling this an unprompted pop-up. The URL comes from
+     student content, so the scheme is checked again rather than trusted. */
+  function openExternal(url) {
+    if (!/^https?:\/\//i.test(url)) {
+      write("\nThat link didn't point at a web address, so nothing opened: "
+            + url + "\n", "dim");
+      return;
+    }
+    var opened = null;
+    try {
+      opened = window.open(url, "_blank");
+      // the opened page must not be able to reach back into the lesson
+      if (opened) { try { opened.opener = null; } catch (e) {} }
+    } catch (e) { /* blocked; handled below */ }
+
+    if (opened) {
+      write("\nOpened in a new tab: " + url + "\n", "dim");
+    } else {
+      write("\nYour browser blocked a new tab for " + url +
+            "\nAllow pop-ups for this site, or copy the address above.\n", "dim");
+    }
+  }
 
   runBtn.disabled = false;
   runLabel.textContent = "Run";

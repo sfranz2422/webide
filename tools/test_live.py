@@ -1459,6 +1459,60 @@ check("  and put away when the lesson ends",
       re.search(r"function paintLive\(\)[\s\S]*?\} else \{[\s\S]*?paintClassView\(null, \"\"\);",
                 _push) is not None)
 
+# ----------------------------------------- a link to another site
+# The preview asks for it with kind 'open'. The editor (app.js) always opened
+# a tab; the live page had no case for it, so the URL fell through to the
+# console and the link did nothing else. Driven in node: live.js's own
+# message listener, receiving what runner.js's click handler sends.
+_msg_at = live_js.find('window.addEventListener("message", function (e) {')
+_msg_fn = live_js[_msg_at:live_js.index("\n  });\n", _msg_at) + 6] if _msg_at >= 0 else ""
+_open_fn = fn_body(live_js, "openExternal")
+if shutil.which("node") and _msg_fn and _open_fn:
+    _harness = """
+var opened = [], lines = [], listener = null, blockAll = false;
+var window = {
+  addEventListener: function (t, f) { if (t === "message") listener = f; },
+  open: function (url, where) {
+    if (blockAll) return null;
+    opened.push([url, where]); return { opener: "lesson" }; }
+};
+var token = "t1", frame = { contentWindow: {} };
+function write(text, cls) { lines.push([text, cls || ""]); }
+function setBusy() {}
+var outputEl = { textContent: "x" };
+%s
+  }
+%s
+function send(kind, text) {
+  listener({ data: { webide: "t1", kind: kind, text: text }, source: frame.contentWindow });
+}
+send("open", "https://developer.mozilla.org/");
+send("open", "javascript:alert(1)");
+blockAll = true;
+send("open", "https://example.com/");
+console.log(JSON.stringify({ opened: opened, lines: lines }));
+""" % (_open_fn, _msg_fn)
+    _res = subprocess.run(["node", "-e", _harness], capture_output=True, text=True)
+    try:
+        _got = json.loads(_res.stdout)
+    except ValueError:
+        _got = {}
+    _lines = [l[0] for l in _got.get("lines") or []]
+    check("live: a link to another site opens it in a new tab",
+          _got.get("opened") == [["https://developer.mozilla.org/", "_blank"]],
+          repr(_got or _res.stderr[:400]))
+    check("  not just printed to the console",
+          _lines and "Opened in a new tab" in _lines[0]
+          and not any(l.strip() == "https://developer.mozilla.org/" for l in _lines),
+          repr(_lines))
+    check("  a javascript: link opens nothing, and says so",
+          len(_lines) > 1 and "nothing opened" in _lines[1], repr(_lines))
+    check("  a blocked pop-up says so",
+          len(_lines) > 2 and "blocked" in _lines[2], repr(_lines))
+else:
+    check("node runs the live page's link handling", False,
+          "brew install node" if _msg_fn and _open_fn else "handler not found in live.js")
+
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"
       % ("SOME FAILED" if bad else "ALL PASSED", len(results), bad))
