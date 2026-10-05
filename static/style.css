@@ -1173,6 +1173,13 @@ body:not(.is-authoring) .notes-body a {
   .mirror-caret { animation: none; }
 }
 .live-mirror .mirror-caret-line { background: var(--banner-bg); }
+/* What the teacher has highlighted, in yellow: a markText span, not a
+ * selection, so the mirror stays unfocusable and uncopyable. Translucent so
+ * the syntax colours still read through it in either theme. */
+.live-mirror .mirror-pick {
+  background: rgba(255, 214, 0, .38);
+  border-radius: 2px;
+}
 
 /* Two frames in one pane — the student's page and the teacher's — and the
  * `.preview-wrap iframe` rule gives every frame display:block, which

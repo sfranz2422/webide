@@ -2450,13 +2450,18 @@ def live_push(code):
         if isinstance(slide, str):
             fields["slide"] = slide if re.fullmatch(r"\d{1,4}/\d{1,4}", slide) else ""
 
-        # Where the teacher's caret is, "line:ch". Same rule as notes: only
+        # Where the teacher's caret is, "line:ch", or what they have
+        # highlighted, "anchor-head" as two of those. Same rule as notes: only
         # when sent. Anything else is stored as none rather than refused, so a
         # bad caret can never cost the class the code that came with it.
+        # A selection's numbers are one digit shorter so the pair still fits
+        # the 24 characters of the cursor column — a longer value would be
+        # refused by Postgres and lose the whole push, code and all.
         cursor = data.get("cursor")
         if isinstance(cursor, str):
-            fields["cursor"] = (cursor if re.fullmatch(r"\d{1,6}:\d{1,6}", cursor)
-                                else "")
+            fields["cursor"] = (cursor if re.fullmatch(
+                r"\d{1,6}:\d{1,6}|\d{1,5}:\d{1,5}-\d{1,5}:\d{1,5}", cursor)
+                else "")
 
         # The teacher's console. Trimmed here rather than refused: a
         # console.log in a loop is exactly when it is huge, and a 413 would
