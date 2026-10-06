@@ -663,7 +663,7 @@
     }
     seen = data.version;
     showNotes(data);
-    showTeacherPage(data, data.initial);
+    showTeacherPage(data);
     showTeacherOutput(data);
   }
 
@@ -776,43 +776,30 @@
 
   // ------------------------------------------- what the teacher's Run made
 
-  /* The teacher's page and console, each beside the student's own and never
-     in it. The student's frame and console are theirs exactly as their
-     editor is; these get their own elements and nothing here touches
-     `frame` or `outputEl`.
+  /* The teacher's page and console, beside the teacher's code and never in
+     the student's own. The student's frame and console are theirs exactly
+     as their editor is; these get their own elements and nothing here
+     touches `frame` or `outputEl`.
 
-     NOTHING COMES TO THE FRONT BY ITSELF. A new page used to, both tabs
-     with it, whenever the teacher pressed Run — and every Run in a lesson
-     took thirty students away from their own page mid-thought. Now the
-     tabs appear and get a dot, and the student looks when they choose to. */
+     The pane appears with the teacher's first Run and then stays, even when
+     a Run comes back empty — a push can land between the teacher's frame
+     clearing and their page arriving, and a pane that came and went would
+     make the code beside it jump sideways on every Run. The console under
+     it appears the first time it has anything in it, for the same reason. */
+  var teacherView = $("teacher-output-view");
   var teacherFrame = $("teacher-preview");
+  var teacherConsole = $("teacher-console");
   var teacherOut = $("teacher-output");
-  var pageMineTab = $("page-mine");
-  var pageTeacherTab = $("page-teacher");
-  var mineTab = $("out-mine");
-  var teacherTab = $("out-teacher");
-  var clearBtn = $("clear");
   var shownPageId = "";
   var shownOutput = null;
 
-  function showTeachers(on) {
-    if (!teacherFrame) return;
-    teacherFrame.hidden = !on;
-    frame.hidden = on;
-    pageMineTab.classList.toggle("is-on", !on);
-    pageTeacherTab.classList.toggle("is-on", on);
-    if (on) pageTeacherTab.classList.remove("has-new");
-    showConsoleTab(on);
-  }
-
-  function showConsoleTab(on) {
-    if (!teacherOut) return;
-    teacherOut.hidden = !on;
-    outputEl.hidden = on;
-    mineTab.classList.toggle("is-on", !on);
-    teacherTab.classList.toggle("is-on", on);
-    if (on) teacherTab.classList.remove("has-new");
-    clearBtn.hidden = on;                     // Clear is for their own
+  function revealTeacher(el) {
+    if (!el.hidden) return;
+    el.hidden = false;
+    /* The mirror just got narrower, and CodeMirror only measures itself
+       on a window resize — without this its scrollbar and the caret's
+       follow are worked out for the old width. */
+    mirror.refresh();
   }
 
   /* Set only when the page itself changes. The poll leaves `page` out when
@@ -821,7 +808,7 @@
      Replaced as an element rather than re-pointed, like the student's own:
      a teacher's page stuck in a loop wedges its frame, and only a new one
      gets the next Run on screen. */
-  function showTeacherPage(data, quietly) {
+  function showTeacherPage(data) {
     if (!teacherFrame || typeof data.page !== "string") return;
     var id = data.page_id || "";
     if (id === shownPageId) return;
@@ -830,37 +817,22 @@
     next.id = "teacher-preview";
     next.title = "Your teacher's page";
     next.setAttribute("sandbox", "allow-scripts allow-forms");
-    next.hidden = teacherFrame.hidden;
     teacherFrame.parentNode.replaceChild(next, teacherFrame);
     teacherFrame = next;
     if (!data.page) return;
     teacherFrame.srcdoc = data.page;
-    pageTeacherTab.hidden = false;
-    teacherTab.hidden = false;
-    if (!quietly && teacherFrame.hidden) pageTeacherTab.classList.add("has-new");
+    revealTeacher(teacherView);
   }
 
   function showTeacherOutput(data) {
     if (!teacherOut || typeof data.output !== "string") return;
     if (data.output === shownOutput) return;
-    var first = shownOutput === null;
     shownOutput = data.output;
     teacherOut.textContent = data.output;
     teacherOut.scrollTop = teacherOut.scrollHeight;
     if (!data.output) return;
-    teacherTab.hidden = false;
-    if (!first && teacherOut.hidden) teacherTab.classList.add("has-new");
-  }
-
-  if (teacherFrame) {
-    pageMineTab.addEventListener("click", function () { showTeachers(false); });
-    pageTeacherTab.addEventListener("click", function () { showTeachers(true); });
-    mineTab.addEventListener("click", function () {
-      showConsoleTab(false); openConsole(true);
-    });
-    teacherTab.addEventListener("click", function () {
-      showConsoleTab(true); openConsole(true);
-    });
+    revealTeacher(teacherConsole);
+    revealTeacher(teacherView);
   }
 
   /* The console starts folded to its head, leaving the column to the page
@@ -899,10 +871,7 @@
     showMirror({ body: L.body, version: L.version, filename: L.filename,
                  notes: L.notes, slide: L.slide, output: L.output,
                  cursor: L.cursor,
-                 page: L.page, page_id: L.pageId,
-                 // joining mid-lesson: offer the teacher's page, but leave
-                 // the student looking at their own until the teacher runs
-                 initial: true });
+                 page: L.page, page_id: L.pageId });
   }
 
   var POLL_MS = 1000;
@@ -989,10 +958,6 @@
     next.id = "preview";
     next.title = "Page preview";
     next.setAttribute("sandbox", "allow-scripts allow-forms");
-    /* Stop makes a new frame too, and it must stay behind the teacher's
-       page if that is the tab in front — a fresh element is visible by
-       default, and the two would stack in one pane. */
-    next.hidden = frame.hidden;
     frame.parentNode.replaceChild(next, frame);
     frame = next;
     return next;
@@ -1004,7 +969,6 @@
        With index.html alone the page ran unstyled and its script never
        loaded, and nothing on screen said why. */
     var files = allFiles();                // theirs, never the mirror's
-    showTeachers(false);                   // their Run, their page
     clearOutput();
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
     var built = window.WebIDERun.assemble(files, token, ENTRY, null);

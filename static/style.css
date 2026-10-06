@@ -939,6 +939,39 @@ body:not(.is-authoring) .notes-body a {
 }
 .live-mine { flex: 1 1 55%; }
 
+/* The mirror's pane is a row: the teacher's code, and once they have run
+ * something, their page beside it, with their console under the page once
+ * it has logged anything. The code keeps the larger share — it is what the
+ * class is copying. */
+.live-mirror { flex-direction: row; }
+.live-mirror-code {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 62%;
+  min-width: 0;
+  min-height: 0;
+}
+.live-mirror-out {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 38%;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+.live-mirror-out[hidden],
+.live-mirror-console[hidden] { display: none; }
+.live-mirror-out .preview-wrap { flex: 1 1 auto; min-height: 0; }
+.live-mirror-console {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 30%;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
+.live-mirror-console .output { flex: 1 1 auto; min-height: 0; }
+
 .live-mirror .CodeMirror { background: var(--bg-head); }
 
 /* THE TEACHER'S CODE IS NOT SELECTABLE.
@@ -995,6 +1028,21 @@ body:not(.is-authoring) .notes-body a {
   .live-left { flex: none; border-right: 0; }
   .live-right { flex: none; min-height: 320px; }
   .live-pane { height: 44vh; }
+  /* A page needs width more than the mirror needs height: stacked here,
+   * each gets the whole phone's width. */
+  .live-mirror { flex-direction: column; height: auto; }
+  .live-mirror-code { height: 44vh; flex: none; }
+  .live-mirror-out { height: 44vh; flex: none; border-left: 0;
+                     border-top: 1px solid var(--line); }
+  /* The editor page's own phone rule fixes every .editor-wrap at 55vh and
+   * every .output at 35vh. Inside a 44vh live pane that spilled out of the
+   * bottom and over whatever came next — the teacher's page heading, or the
+   * top of the student's own editor — so here they fill their pane instead. */
+  .live-pane .editor-wrap { height: auto; flex: 1 1 auto; }
+  /* And with that gone, the student's pane needs a height of its own: its
+   * 55% basis is of a column with no height here, so it shrank to its head. */
+  .live-mine { flex: none; }
+  .live-mirror-console .output { height: auto; }
 }
 
 /* The join card, and the host's "your class is watching" page. */
@@ -1120,26 +1168,8 @@ body:not(.is-authoring) .notes-body a {
   color: var(--muted);
 }
 
-/* The student's output and the teacher's, as two tabs in one pane head.
- * Styled like the head's own label so the pane does not look busier than it
- * did with one; the one in front is the one in full colour. */
-.out-tabs { display: inline-flex; gap: 14px; }
-.out-tab {
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 0 0 2px;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  color: var(--muted);
-  cursor: pointer;
-}
-.out-tab:hover { color: var(--text); }
-.out-tab.is-on { color: var(--text); border-bottom-color: var(--accent); }
-/* Changed while the student's own program was running, so it did not jump
- * to the front; a dot says there is something new behind it. */
-.out-tab.has-new::after { content: " •"; color: var(--accent); }
+/* The fold arrow and the label of the student's console, side by side. */
+.out-tabs { display: inline-flex; gap: 8px; }
 
 /* The console folded: just its head, and the page and notes get the
  * column. The <pre>s are hidden rather than squeezed to zero so the

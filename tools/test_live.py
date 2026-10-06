@@ -170,7 +170,12 @@ check("a student who is not signed in can watch", r.status_code == 200,
 body = r.get_json()
 check("  and gets the whole file, not a diff", body["body"] == "line one, fixed")
 check("  with the version to poll against", body["version"] == 1001)
-check("  and who is teaching", body["host"] == "Mr Franz", body.get("host"))
+check("  and who is teaching, by last name only", body["host"] == "Franz",
+      body.get("host"))
+check("  a one-word name as it is, and no name the email's first half",
+      W._live_host_name(accounts.User(name="Franz", email="a@b.org")) == "Franz"
+      and W._live_host_name(accounts.User(name="", email="sfranz@b.org"))
+      == "sfranz")
 
 r = stranger.get("/api/live/%s?v=%d" % (CODE, body["version"]))
 check("polling with the version they have gets 304, not the file again",
@@ -316,9 +321,17 @@ check("a late joiner gets all three in the page",
       and re.search(r'^\s*page: "\\u003cp\\u003ehi', page, re.M) is not None
       and re.search(r'^\s*pageId: "%s"' % W._page_id("<p>hi</p>"), page, re.M)
       is not None)
-check("  with a slide marker, and tabs for the teacher's page and console",
-      'id="live-slide"' in page and 'id="page-teacher"' in page
-      and 'id="out-teacher"' in page and 'id="teacher-output"' in page)
+check("  with a slide marker and a place for the teacher's page and console",
+      'id="live-slide"' in page and 'id="teacher-preview"' in page
+      and 'id="teacher-output"' in page)
+_mirror_html = page[page.index('class="live-pane live-mirror"'):
+                    page.index('class="live-pane live-mine"')]
+_theirs_html = page[page.index('id="preview-view"'):page.index('id="live-notes-view"')]
+check("  beside the teacher's code, not in the student's own panes",
+      'id="teacher-preview"' in _mirror_html and 'id="teacher-output"' in _mirror_html
+      and "teacher-" not in _theirs_html
+      and not re.search(r'class="out-tab[" ]', _theirs_html),
+      "the class had to flick between two tabs to compare the pages")
 _tf = re.search(r'<iframe id="teacher-preview"[^>]*>', page)
 check("  the teacher's page in a frame sandboxed like theirs",
       _tf is not None and 'sandbox="allow-scripts allow-forms"' in _tf.group(0)
@@ -867,6 +880,17 @@ check("starting again makes a NEW lesson, not the ended one",
 # ------------------------------------------- resuming, and signing out
 print("\nResuming after a reload, and signing out")
 
+_db = W.SessionLocal()
+_db.query(accounts.LiveSession).filter_by(host_id=TEACHER, ended=0).update(
+    {"host_name": "Mr Franz"})
+_db.commit()
+_open = _db.query(accounts.LiveSession).filter_by(host_id=TEACHER, ended=0).first()
+_db.close()
+if _open is not None:
+    teacher.post("/api/live/start", json={"body": "x", "resume": _open.code})
+    check("a lesson opened under the old name picks up the new one on reload",
+          stranger.get("/api/live/%s" % _open.code).get_json()["host"] == "Franz")
+
 def open_lessons(uid):
     db = W.SessionLocal()
     try:
@@ -1378,25 +1402,27 @@ check("  set only when the page itself changes",
 check("  and the poll says which page it has",
       re.search(r'"&pg=" \+ encodeURIComponent\(shownPageId\)', live_code)
       is not None)
-check("  a teacher's Run never takes over their pane, only gets a dot",
-      "showTeachers(true)" not in _tpage
-      and re.search(r"if \(!quietly && teacherFrame\.hidden\) pageTeacherTab\.classList\.add\(\"has-new\"\);",
-                    _tpage) is not None
-      and re.search(r"showTeacherPage\(data, data\.initial\)", live_code)
-      is not None,
-      "every teacher Run took the class away from their own page")
+_reveal = fn_body(live_code, "revealTeacher")
+check("  appearing with the teacher's first Run and then staying",
+      "revealTeacher(teacherView)" in _tpage
+      and "if (!el.hidden) return;" in _reveal
+      and not re.search(r"teacher(View|Console)\.hidden = true", live_code),
+      "an empty push mid-Run would make the code beside it jump sideways")
+check("  and the mirror re-measured when it appears",
+      re.search(r"el\.hidden = false;\s*(?:/\*[\s\S]*?\*/\s*)?mirror\.refresh\(\);",
+                _reveal) is not None)
 check("the teacher's console is written only into its own pane",
       "teacherOut.textContent = data.output" in _tout
       and not re.search(r"outputEl[^;]*data\.output|write\(data\.output",
                         live_code))
 check("  and its lines alone never pull the pane over",
       "showConsoleTab(true)" not in _tout and "showTeachers(true)" not in _tout)
-check("their own Run brings their own page back",
-      re.search(r"function run\(\)[\s\S]{0,200}showTeachers\(false\)",
-                live_code) is not None)
-check("Stop's fresh frame stays behind the teacher's page",
-      "next.hidden = frame.hidden;" in fn_body(live_code, "freshFrame"),
-      "the two frames would stack in one pane")
+check("the student's own page is never hidden for the teacher's",
+      not re.search(r"\bframe\.hidden\s*=|\boutputEl\.hidden\s*=", live_code),
+      "nothing of the teacher's sits in the student's panes any more")
+check("the teacher's console appears once it has logged something",
+      re.search(r"if \(!data\.output\) return;\s*revealTeacher\(teacherConsole\)",
+                _tout) is not None)
 # The teacher's frame posts console messages to this window like any preview.
 # The listener must drop them — they carry the teacher's token, not this
 # page's, and come from a different frame.

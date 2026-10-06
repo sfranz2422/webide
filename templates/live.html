@@ -138,18 +138,44 @@
         arriving from the network is ever given to the lower one, so there is
         no path — not even a buggy one — by which a student loses their own
         work because the teacher typed. #}
+    {#  The teacher's code on the left and what their Run made on the right,
+        in one row, as in PyIDE. The teacher's page was a second tab in the
+        student's own page pane once, and the class had to flick between the
+        two to compare them. The right half appears with the teacher's first
+        Run and stays, so the code does not jump sideways every time they
+        run it.
+
+        THE TEACHER'S FRAME IS SANDBOXED EXACTLY LIKE THE STUDENT'S — scripts
+        and forms, never same-origin — so it cannot reach this page or the
+        student's work. It posts its console messages to this window like any
+        preview does, and they are dropped: the listener in live.js only
+        hears the student's own frame. The teacher's console arrives on the
+        poll instead and goes in its own <pre>. #}
     <div class="live-pane live-mirror">
-      <div class="pane-head">
-        <span>What {{ live.host_name or "your teacher" }} is typing</span>
-        <span id="mirror-name" class="dim">{{ live.filename }}</span>
+      <div class="live-mirror-code">
+        <div class="pane-head">
+          <span>What {{ live.host_name or "your teacher" }} is typing</span>
+          <span id="mirror-name" class="dim">{{ live.filename }}</span>
+        </div>
+        <div id="mirror-wrap" class="editor-wrap"><textarea id="mirror"></textarea></div>
+        {#  A .md file the teacher opens is class notes, not code: it renders
+            here instead, so a link they put up is a link the class can click.
+            notes.js sanitises it and forces every link to open in a new tab,
+            which matters more here than anywhere else in the app — thirty
+            people click it at once and none of them should lose their work. #}
+        <div id="mirror-notes" class="notes-body prose" hidden></div>
       </div>
-      <div id="mirror-wrap" class="editor-wrap"><textarea id="mirror"></textarea></div>
-      {#  A .md file the teacher opens is class notes, not code: it renders
-          here instead, so a link they put up is a link the class can click.
-          notes.js sanitises it and forces every link to open in a new tab,
-          which matters more here than anywhere else in the app — thirty
-          people click it at once and none of them should lose their work. #}
-      <div id="mirror-notes" class="notes-body prose" hidden></div>
+      <div id="teacher-output-view" class="live-mirror-out" hidden>
+        <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s page</span></div>
+        <div class="preview-wrap">
+          <iframe id="teacher-preview" title="Your teacher's page"
+                  sandbox="allow-scripts allow-forms"></iframe>
+        </div>
+        <div id="teacher-console" class="live-mirror-console" hidden>
+          <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s console</span></div>
+          <pre id="teacher-output" class="output"></pre>
+        </div>
+      </div>
     </div>
 
     <div class="live-pane live-mine">
@@ -178,50 +204,30 @@
     {#  The student's own page, rendered. Same sandboxed frame the editor
         uses — no same-origin access, so nothing they write can reach this
         page or the lesson. #}
-    {#  Their page and the teacher's share one pane, as two tabs. The
-        teacher's tab appears the first time they press Run and gets a dot
-        each time they run again, but never comes to the front by itself —
-        the student clicks it.
-
-        TWO FRAMES, NEVER ONE, and the teacher's is sandboxed exactly like
-        theirs — scripts and forms, never same-origin — so the teacher's page
-        cannot reach this one either. It posts its console messages to this
-        window like any preview does, and they are dropped: the listener
-        below only hears the student's own frame. #}
     <div id="preview-view" class="subpane">
-      <div class="pane-head">
-        <span class="out-tabs">
-          <button id="page-mine" class="out-tab is-on" type="button">Your page</button>
-          <button id="page-teacher" class="out-tab" type="button" hidden
-                  title="The page {{ live.host_name or 'your teacher' }} last ran">{{ live.host_name or "Teacher" }}'s page</button>
-        </span>
-      </div>
+      <div class="pane-head"><span>Your page</span></div>
       <div class="preview-wrap">
         <iframe id="preview" title="Page preview"
                 sandbox="allow-scripts allow-forms"></iframe>
-        <iframe id="teacher-preview" title="Your teacher's page"
-                sandbox="allow-scripts allow-forms" hidden></iframe>
       </div>
     </div>
 
     <div id="output-view" class="subpane live-console is-folded">
-      {#  Same two tabs for the console, and two <pre>s for the same reason
-          as the frames: nothing from the network is written into theirs.
-          Folded to its head until opened or an error; see openConsole. #}
+      {#  Theirs alone: the teacher's console is beside the teacher's code,
+          in its own <pre>, and nothing from the network is written into
+          this one. Folded to its head until opened or an error; see
+          openConsole. #}
       <div class="pane-head">
         <span class="out-tabs">
           <button id="out-fold" class="out-fold" type="button"
                   aria-controls="output-view" aria-expanded="false"
                   title="Show the console">▸</button>
-          <button id="out-mine" class="out-tab is-on" type="button">Console</button>
-          <button id="out-teacher" class="out-tab" type="button" hidden
-                  title="What {{ live.host_name or 'your teacher' }}'s page logged">{{ live.host_name or "Teacher" }}'s console</button>
+          <span>Console</span>
         </span>
         <button id="clear" class="linkbtn">Clear</button>
       </div>
       <pre id="output" class="output"><span class="dim">Press Run to see your page.</span>
 </pre>
-      <pre id="teacher-output" class="output" hidden></pre>
     </div>
 
     {#  The project's notes, always in view — not only while the teacher has

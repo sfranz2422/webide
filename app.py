@@ -2333,6 +2333,18 @@ def _title_of_assignment(db, assignment_id):
     return row.title if row else ""
 
 
+def _live_host_name(user):
+    """What the class's page calls the teacher: the last word of their name.
+
+    Google hands over the whole name, and "Stephen Franz's page" across
+    thirty screens is long and not what a class calls anyone. A one-word
+    name is used as it is, and an account with no name at all falls back to
+    the email's first half, as everywhere else.
+    """
+    words = (user.name or "").split()
+    return words[-1] if words else user.display_name()
+
+
 @app.post("/api/live/start")
 def live_start():
     """Open a session, or hand back the one already running.
@@ -2403,7 +2415,7 @@ def live_start():
                 code=accounts.new_id(db, accounts.LiveSession, "code"),
                 app=APP_NAME,
                 host_id=user.id,
-                host_name=user.display_name(),
+                host_name=_live_host_name(user),
                 title=clean(data.get("title"), 200) or "Live lesson",
                 body=body,
                 filename=clean(data.get("filename"), 200) or "main.py",
@@ -2413,6 +2425,9 @@ def live_start():
             db.add(live)
         else:
             live.title = clean(data.get("title"), 200) or live.title
+            # Refreshed on every resume, so a lesson opened before the name
+            # rule changed picks it up at the teacher's next reload.
+            live.host_name = _live_host_name(user)
             # Resuming after a reload must not quietly drop the assignment —
             # the class would carry on with no way to hand anything in, and
             # nothing would say so. Only an explicit choice changes it.
