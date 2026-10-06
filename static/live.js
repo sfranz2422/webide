@@ -1051,6 +1051,29 @@
   runBtn.disabled = false;
   runLabel.textContent = "Run";
   runBtn.addEventListener("click", run);
+
+  /* ------------------------------------------------ their page in a new tab
+   *
+   * The editor's New tab, unchanged: every one of their files goes to /play
+   * through this browser's storage under the key demo.js reads, and one
+   * named tab is reused. It reads their editor and never writes to it. The
+   * teacher's files are not what it sends — a student who wants the
+   * teacher's page in a tab has to have typed it, which is the exercise. */
+  function runInNewTab() {
+    try {
+      localStorage.setItem("webide-play", JSON.stringify({
+        files: allFiles(),
+        title: L.title || "Page"
+      }));
+    } catch (e) {
+      window.alert("This browser is blocking site storage, so the page "
+                   + "cannot be handed to a new tab. Use the preview here instead.");
+      return;
+    }
+    window.open("/play", "webide-play");
+  }
+
+  if ($("run-tab")) $("run-tab").addEventListener("click", runInNewTab);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
 

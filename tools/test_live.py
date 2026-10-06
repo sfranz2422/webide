@@ -231,6 +231,17 @@ page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
 check("a student's lesson page has the light/dark button",
       'id="theme"' in page
       and re.search(r"^\s*themeSwitch\(\);", open(os.path.join(WEBIDE, "static", "live.js")).read(), re.M))
+_live_js = open(os.path.join(WEBIDE, "static", "live.js")).read()
+_demo_js = open(os.path.join(WEBIDE, "static", "demo.js")).read()
+check("  and the New tab button",
+      'id="run-tab" class="btn" type="button"' in page
+      and re.search(r'^\s*if \(\$\("run-tab"\)\) \$\("run-tab"\)\.addEventListener\("click", runInNewTab\);',
+                    _live_js, re.M))
+check("  which hands all their own files to /play under the key /play reads",
+      re.search(r'localStorage\.setItem\("webide-play", JSON\.stringify\(\{\s*files: allFiles\(\),',
+                _live_js)
+      and 'localStorage.getItem("webide-play")' in _demo_js
+      and re.search(r'^\s*window\.open\("/play", "webide-play"\);', _live_js, re.M))
 check("a student who joins now gets them in the page",
       re.search(r'^\s*notes: "# Today', page, re.M) is not None)
 check("  with a pane to show them in",
@@ -1157,9 +1168,11 @@ check("  and every other tab is filled from the page or their browser",
       doc_fills)
 check("  and none is ever written to afterwards",
       re.search(r"docs\[[^\]]+\]\.(setValue|replaceRange)\(", live_code) is None)
+# Three saves, and the fourth is New tab's handover to /play, which carries
+# every tab for the same reason: a page missing its style.css runs unstyled.
 check("  every save carries every tab, never an empty map",
       "files: {}" not in live_code
-      and len(re.findall(r"files: allFiles\(\)", live_code)) == 3,
+      and len(re.findall(r"files: allFiles\(\)", live_code)) == 4,
       "an autosave sending {} was refused, and nothing after the first Save was kept")
 run_body = live_code[live_code.index("function run()"):]
 run_body = run_body[:run_body.index("\n  }\n")]
