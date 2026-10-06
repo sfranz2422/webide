@@ -1559,6 +1559,18 @@ def view_demo(slug):
         db.close()
 
 
+@app.get("/play")
+def play():
+    """The student's page in a tab of its own: the editor's New tab button.
+
+    The demo page's player, with nothing behind it on the server: the editor
+    puts the files in this browser's storage and opens this page, which reads
+    them from there (see runInNewTab in app.js). So there is no slug, no row,
+    and nothing here for anyone else to open.
+    """
+    return render_template("demo.html", title="Page", slug=None, play=True)
+
+
 @app.get("/d/<slug>/source")
 def demo_source(slug):
     """What the demo page fetches when Run is pressed."""

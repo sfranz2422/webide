@@ -592,6 +592,11 @@ li.CodeMirror-hint-active { background: var(--accent); color: var(--on-accent); 
   min-height: 0;
 }
 .demo-main .pane-right { flex: 1 1 100%; }
+/* The page is what this view is for — a demo link, or the editor's New tab
+ * (/play) — so it takes the column, and the console is a strip under it.
+ * At the editor's 62/38 split the console had nearly half a projector. */
+.demo-main .preview-frame { flex: 1 1 0; }
+.demo-main #output { flex: 0 0 110px; min-height: 0; }
 
 /* ------------------------------------------------- signing in and saving */
 

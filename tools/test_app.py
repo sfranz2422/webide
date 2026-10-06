@@ -290,4 +290,37 @@ check("  and the addons load before %s builds the editor" % EDITOR_SCRIPT,
 check("  and the search bar is given a usable width",
       ".CodeMirror-dialog input" in style_text)
 
+
+# ---------------------------------------------------- the page in a new tab
+# The editor hands the files to /play through this browser's storage and
+# opens one named tab; /play is the demo page's player, reading them back.
+print("\nThe page in a new tab")
+_index = (ROOT / "templates" / "index.html").read_text()
+_demo_html = (ROOT / "templates" / "demo.html").read_text()
+_app_js = (ROOT / "static" / "app.js").read_text()
+_demo_js = (ROOT / "static" / "demo.js").read_text()
+check("the editor has a New tab button, wired up",
+      'id="run-tab"' in _index
+      and '$("run-tab").addEventListener("click", runInNewTab)' in _app_js)
+check("  which opens /play in one named tab",
+      'window.open("/play", "webide-play")' in _app_js)
+check("  handing over every file under the key /play reads",
+      'localStorage.setItem("webide-play"' in _app_js and "files: allFiles()" in _app_js
+      and 'localStorage.getItem("webide-play")' in _demo_js)
+_r = client.get("/play")
+check("/play renders the demo player, with nothing to fetch",
+      _r.status_code == 200 and b"play: true" in _r.data and b"/source" not in _r.data,
+      _r.status_code)
+check("  and shows the page by itself",
+      re.search(r"if \(PLAYING\) run\(\);\s*\}\)\(\);\s*$", _demo_js) is not None)
+check("  reading the files afresh each time, not a cached demo's",
+      re.search(r"async function loadProject\(\) \{\s*if \(PLAYING\) \{ project = handedOver\(\); return project; \}",
+                _demo_js) is not None)
+check("  in the same sandbox as the editor's preview",
+      re.search(r'next\.setAttribute\("sandbox", "allow-scripts allow-forms"\)', _demo_js) is not None
+      and "allow-same-origin" not in _demo_js)
+check("the page takes the column, the console a strip",
+      ".demo-main #output { flex: 0 0 110px" in style_text
+      and ".demo-main .preview-frame { flex: 1 1 0; }" in style_text)
+
 done()

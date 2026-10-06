@@ -117,7 +117,27 @@
   var page = ENTRY;
   var trail = [];
 
+  /* /play: a page handed over by the editor's New tab button, through this
+     browser's storage (see runInNewTab in app.js). Read afresh on every Run
+     rather than kept, so pressing New tab again after an edit — which
+     reloads this tab — and pressing Run here both show the latest files.
+     Kept in `project` like a demo's, because links between the pages and
+     Back read it from there. */
+  var PLAYING = !!(window.WEBIDE_DEMO && window.WEBIDE_DEMO.play);
+
+  function handedOver() {
+    var data = null;
+    try { data = JSON.parse(localStorage.getItem("webide-play") || "null"); }
+    catch (e) { /* blocked, or not ours */ }
+    if (!data || !data.files || typeof data.files !== "object") {
+      throw new Error("Nothing to show here. Press \u2197 New tab in the editor.");
+    }
+    if (data.title) document.title = data.title + " \u2014 WebIDE";
+    return data.files;
+  }
+
   async function loadProject() {
+    if (PLAYING) { project = handedOver(); return project; }
     if (project) return project;
     var res = await fetch(window.WEBIDE_DEMO.sourceUrl, { cache: "no-store" });
     if (!res.ok) throw new Error("This demo link is no longer available.");
@@ -256,4 +276,6 @@
     var cls = data.kind === "error" ? "err" : (data.kind === "warn" ? "warn" : "");
     write(String(data.text) + (where ? "   (" + where + ")" : "") + "\n", cls);
   });
+  // Opened from the editor's New tab button to see the page, so show it.
+  if (PLAYING) run();
 })();

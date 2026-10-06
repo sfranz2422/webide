@@ -82,7 +82,11 @@
 <script>
   /* Only the slug. The project itself is fetched when Run is pressed, and is
      never written into this document — nothing here is worth reading. */
+  {% if play %}
+  window.WEBIDE_DEMO = { play: true };
+  {% else %}
   window.WEBIDE_DEMO = { sourceUrl: "{{ url_for('demo_source', slug=slug) }}" };
+  {% endif %}
 </script>
 <script src="{{ url_for('static', filename='runner.js') }}"></script>
 <script src="{{ url_for('static', filename='demo.js') }}"></script>

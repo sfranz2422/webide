@@ -185,6 +185,31 @@
     Object.keys(docs).forEach(function (n) { out[n] = docs[n].getValue(); });
     return out;
   }
+  /* ------------------------------------------------ the page in a new tab
+   *
+   * The files go to /play through this browser's storage, not the server:
+   * nothing is saved or shared by it, and a signed-out student can use it
+   * as freely as Run. /play is the demo page's player (demo.js), which reads
+   * them from there and shows the page at once.
+   *
+   * One named tab, reused: pressing it again after an edit reloads that tab
+   * with the new files instead of opening another one per press. */
+  function runInNewTab() {
+    try {
+      localStorage.setItem("webide-play", JSON.stringify({
+        files: allFiles(),
+        title: ($("title") && $("title").value) || "Page"
+      }));
+    } catch (e) {
+      window.alert("This browser is blocking site storage, so the page "
+                   + "cannot be handed to a new tab. Use the preview here instead.");
+      return;
+    }
+    window.open("/play", "webide-play");
+  }
+
+  if ($("run-tab")) $("run-tab").addEventListener("click", runInNewTab);
+
 
   /* index.html first, then the rest alphabetically — the entry point should
      always be the leftmost tab. */

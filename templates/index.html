@@ -54,6 +54,10 @@
       <span class="btn-icon">▶</span><span id="run-label">Run</span>
     </button>
     <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    {#  The page in a tab of its own: bigger on a projector, and a real-
+        looking site for students to click around. #}
+    <button id="run-tab" class="btn" type="button"
+            title="Open your page in a new tab">↗ New tab</button>
     {% if not readonly %}
       <label class="toggle">
         <input type="checkbox" id="auto-run"> Auto
