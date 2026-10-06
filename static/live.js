@@ -29,6 +29,13 @@
   "use strict";
 
   var L = window.WEBIDE_LIVE || {};
+
+  // The two editors, once there are any. Declared here so the theme switch
+  // below can repaint them; on the join card and the host's page they stay
+  // undefined and the switch only changes the page around them.
+  var mirror, mine;
+  themeSwitch();
+
   if (!L.joined || L.isHost) {
     hostControls();
     return;
@@ -61,7 +68,7 @@
      cursor the mirror can be focused and looks typeable, and a student who
      clicks in and starts typing finds nothing happens and assumes the page
      is broken. */
-  var mirror = CodeMirror.fromTextArea($("mirror"), {
+  mirror = CodeMirror.fromTextArea($("mirror"), {
     mode: "htmlmixed",
     theme: cmTheme(),
     lineNumbers: true,
@@ -95,7 +102,7 @@
      nestings. Nothing broke; it just behaved worse than the editor students
      already knew, in the one lesson where the whole class is copying
      nesting off the board. */
-  var mine = CodeMirror.fromTextArea($("mine"), {
+  mine = CodeMirror.fromTextArea($("mine"), {
     mode: "htmlmixed",
     theme: cmTheme(),
     lineNumbers: true,
@@ -1046,6 +1053,56 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
+
+  // ----------------------------------------------------------------- theme
+  /* The editor's light/dark button, on the same localStorage key, so a choice
+     made in either place holds in both. The <head> script has already set
+     data-theme before the first paint; this only keeps the glyph, the two
+     CodeMirrors and the computer's own setting in step with it. */
+  function themeSwitch() {
+    var THEME_KEY = "webide-theme";
+    var btn = document.getElementById("theme");
+    var glyph = document.getElementById("theme-glyph");
+    if (!btn) return;
+
+    function current() { return isDark() ? "dark" : "light"; }
+
+    function apply(name, remember) {
+      document.documentElement.setAttribute("data-theme", name);
+      // CodeMirror carries its own colours, so it needs telling separately
+      var cm = name === "light" ? "default" : "material-darker";
+      [mirror, mine].forEach(function (ed) {
+        if (ed) { ed.setOption("theme", cm); ed.refresh(); }
+      });
+      glyph.textContent = name === "light" ? "☾" : "☀";
+      btn.title = name === "light"
+        ? "Switch to dark (easier on the eyes up close)"
+        : "Switch to light (easier to read on a projector)";
+      btn.setAttribute("aria-label", btn.title);
+      if (remember) {
+        try { localStorage.setItem(THEME_KEY, name); } catch (e) { /* blocked */ }
+      }
+    }
+
+    apply(current(), false);
+    btn.addEventListener("click", function () {
+      apply(current() === "light" ? "dark" : "light", true);
+    });
+
+    // Follow the computer's setting as it changes, until a choice is made.
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: light)");
+      var onSystemChange = function () {
+        var saved = null;
+        try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* blocked */ }
+        if (saved !== "light" && saved !== "dark") {
+          apply(mq.matches ? "light" : "dark", false);
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener("change", onSystemChange);
+      else if (mq.addListener) mq.addListener(onSystemChange);
+    }
+  }
 
   // ----------------------------------------------------------- host's page
 
