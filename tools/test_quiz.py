@@ -448,6 +448,10 @@ check("the editor says which assignment answers go to",
       "setQuizContext({ assignment: window.WEBIDE.assignmentSlug," in app_js)
 check("so does the live page",
       "setQuizContext({ assignment: L.assignment," in live_js)
+check("one question that fails to build does not take the notes with it",
+      re.search(r"try \{\s*code\.parentNode\.replaceWith\(buildQuiz\(parseQuiz\(",
+                notes_js) is not None,
+      "the whole pane said 'could not be displayed' instead")
 check("rendered notes turn quiz blocks into questions",
       re.search(r"hardenLinks\(target\);\s*enhanceQuizzes\(target\);", notes_js)
       is not None)

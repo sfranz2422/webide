@@ -230,11 +230,16 @@
     previewView.hidden = false;
   }
 
+  /* Always as slides when the notes have `---` in them, with ◀ ▶ under
+     them (notes.js, slideView) — here, on a shared link, and on the class's
+     page in a live lesson alike. */
+  var notesSlides = window.WebIDENotes.slideView(notesBody);
+
   function showNotes(name) {
     notesName.textContent = name;
     previewView.hidden = true;
     notesView.hidden = false;
-    window.WebIDENotes.render(notesBody, docs[name].getValue());
+    notesSlides.show(docs[name].getValue());
   }
 
   /* Which file the editor is actually editing.
@@ -742,7 +747,7 @@
     // markdown open for editing: keep the rendered notes in step, suggest
     // nothing — prose has no names to complete
     if (mdSourceOpen && window.WebIDENotes.isMarkdown(active)) {
-      window.WebIDENotes.render(notesBody, docs[active].getValue());
+      notesSlides.show(docs[active].getValue());
       return;
     }
 
@@ -1020,29 +1025,24 @@
     }
 
     /* ------------------------------------------------------------ slides
-       Notes with `---` dividers are slides, and the class is sent ONE: the
-       one this teacher is on. Here the whole file stays in the editor, as
-       ever. The cutting happens in this browser, so the server stores and
-       students render exactly what they did before — the only new thing on
-       the wire is "3/5".
+       Notes with `---` dividers are slides. The class is sent the WHOLE
+       file and "3/5", the slide this teacher is on: every student can move
+       through the slides on their own (notes.js, slideView), and each time
+       the teacher moves, every screen jumps to the teacher's slide. Sending
+       one slide at a time, as this did first, made reading ahead or going
+       back to an earlier question impossible.
 
        `slideAt` is an index that survives editing the notes mid-lesson, and
        is clamped when slides are deleted out from under it. Two slides at
        least, or it is not slides: a file whose one `---` leaves only one
        slide with anything on it goes whole.
 
-       `wholeNotes` is Show all: the class gets the whole file, as if it had
-       no `---` at all. For notes that are a page of directions rather than
-       a deck, whose rules would otherwise chop them into pieces the
-       class can only see one at a time. slideAt is kept, so turning it off
-       goes back to the slide the class was on. Remembered for this lesson
-       across a reload of this page — otherwise a reload would snap thirty
-       screens back to one slide with nobody having asked. */
+       There was a Show all button that sent the whole file as one page.
+       With students free to move through the slides it had nothing left
+       to do, and it went. */
     var slideAt = 0;
-    var wholeNotes = false;
     var slideCtl = $("live-slides");
     var slideLabel = $("slide-at");
-    var wholeBtn = $("slide-whole");
 
     function currentSlides() {
       var cut = window.WebIDENotes.slides(liveNotes());
@@ -1054,28 +1054,13 @@
       slideCtl.hidden = !(liveCode && cut);
       if (slideCtl.hidden) return;
       slideLabel.textContent = (slideAt + 1) + " / " + cut.length;
-      slideLabel.hidden = $("slide-prev").hidden = $("slide-next").hidden
-        = wholeNotes;
       $("slide-prev").disabled = slideAt <= 0;
       $("slide-next").disabled = slideAt >= cut.length - 1;
-      wholeBtn.textContent = wholeNotes ? "Slides" : "Show all";
-      wholeBtn.title = wholeNotes
-        ? "Go back to sending the class one slide at a time"
-        : "Send the whole notes file to the class instead of one slide";
-    }
-
-    function setWhole(on) {
-      wholeNotes = on;
-      try {
-        if (on) localStorage.setItem("webide-live-whole", liveCode + "/" + slideAt);
-        else localStorage.removeItem("webide-live-whole");
-      } catch (e) {}
-      pushNow();                 // now, not on the next tick
     }
 
     function moveSlide(by) {
       var cut = currentSlides();
-      if (!liveCode || !cut || wholeNotes) return;
+      if (!liveCode || !cut) return;
       slideAt = Math.max(0, Math.min(cut.length - 1, slideAt + by));
       pushNow();                 // now, not on the next tick
     }
@@ -1083,15 +1068,12 @@
     if (slideCtl) {
       $("slide-prev").addEventListener("click", function () { moveSlide(-1); });
       $("slide-next").addEventListener("click", function () { moveSlide(1); });
-      wholeBtn.addEventListener("click", function () { setWhole(!wholeNotes); });
     }
 
-    /* What the class's Notes pane shows, shown here under the preview: the
-       current slide, or the whole notes when they are not slides or Show
-       all is on. Fed the
-       very `notes` and `slide` pushNow sends, so it cannot disagree with
-       the class about which slide they are on — a copy worked out
-       separately from slideAt could.
+    /* The slide the class is on, shown here under the preview — or the whole
+       notes when they are not slides. Fed by pushNow from the very cut and
+       `slide` it sends, so it cannot disagree with the class about which
+       slide that is — a copy worked out separately from slideAt could.
 
        Re-rendered only when they change. pushNow runs on every tick, and
        rendering markdown that often would reset the scroll under the
@@ -1127,17 +1109,18 @@
       if (!liveCode) return;
       var name = active;
       var text = docs[name] ? docs[name].getValue() : "";
-      var notes = liveNotes();
+      var notes = liveNotes();          // whole: students cut it themselves
       var slide = "";
+      var onSlide = notes;              // what "Class sees" shows
       var cut = currentSlides();
-      if (cut && !wholeNotes) {
+      if (cut) {
         slideAt = Math.min(slideAt, cut.length - 1);
-        notes = cut[slideAt];
+        onSlide = cut[slideAt];
         slide = (slideAt + 1) + "/" + cut.length;
         /* With the notes tab open, the mirror shows that file too — whole,
-           which would put every slide on screen at once and defeat the
-           point. It gets the current slide like the notes pane does. */
-        if (name === notesFile()) text = notes;
+           which would put every slide on screen at once in a pane that has
+           no arrows. It gets the teacher's slide. */
+        if (name === notesFile()) text = onSlide;
       }
       /* Where the caret is, so the class sees it blink in the mirror and
          the mirror scrolls to follow it. In the stamp below, so moving it
@@ -1160,7 +1143,7 @@
         }
       }
       paintSlides(cut);
-      paintClassView(notes, slide);
+      paintClassView(onSlide, slide);
       var output = liveOutput();
       var page = sharedPage;
       var stamp = [name, text, notes, slide, output, page, cursor].join("\u0000");
@@ -1230,12 +1213,8 @@
       liveCode = null;
       if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
       lastSent = null;
-      wholeNotes = false;
       paintLive();
-      try {
-        localStorage.removeItem("webide-live-host");
-        localStorage.removeItem("webide-live-whole");
-      } catch (e) {}
+      try { localStorage.removeItem("webide-live-host"); } catch (e) {}
       if (code && !quietly) {
         fetch("/api/live/" + encodeURIComponent(code) + "/stop", { method: "POST" });
       }
@@ -1343,13 +1322,6 @@
           // fresh lesson has none and starts at the beginning.
           var at = /^(\d+)\//.exec(data.slide || "");
           slideAt = at ? Math.max(0, parseInt(at[1], 10) - 1) : 0;
-          /* With Show all on, the class has no slide number to come back
-             to, so the one they were on is kept beside the flag — turning
-             it off after a reload would otherwise start them at slide 1. */
-          var whole = null;
-          try { whole = localStorage.getItem("webide-live-whole"); } catch (e) {}
-          wholeNotes = !!whole && whole.split("/")[0] === liveCode;
-          if (wholeNotes) slideAt = parseInt(whole.split("/")[1], 10) || 0;
           lastSent = null;
           try { localStorage.setItem("webide-live-host", liveCode); } catch (e) {}
           paintLive();
