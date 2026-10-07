@@ -323,4 +323,15 @@ check("the page takes the column, the console a strip",
       ".demo-main #output { flex: 0 0 110px" in style_text
       and ".demo-main .preview-frame { flex: 1 1 0; }" in style_text)
 
+# Every page in the app's own style follows the editor's light/dark choice.
+# The teacher pages once did not, and a teacher in light mode in the editor
+# got every assignment page in dark.
+import glob as _glob
+_tpl_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+_missing = [os.path.basename(t) for t in sorted(_glob.glob(os.path.join(_tpl_dir, "*.html")))
+            if "filename='style.css'" in open(t).read()
+            and 'localStorage.getItem("webide-theme")' not in open(t).read()]
+check("every page with the app's stylesheet follows the editor's theme",
+      not _missing, ", ".join(_missing))
+
 done()
