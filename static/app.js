@@ -13,6 +13,12 @@
   var notesBody = $("notes-body");
   var notesName = $("notes-name");
   var notesEditBtn = $("notes-edit");     // only while authoring
+
+  /* Questions in the notes answer into this assignment. On a project that
+     is not one, or the teacher's own copy, there is nowhere to record an
+     answer, and notes.js says so on the question rather than taking one. */
+  window.WebIDENotes.setQuizContext({ assignment: window.WEBIDE.assignmentSlug,
+                                      signedIn: window.WEBIDE.signedIn });
   var frame = $("preview");
   var tabsEl = $("file-tabs");
 
