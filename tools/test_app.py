@@ -281,11 +281,12 @@ EDITOR_SCRIPT = "app.js"
 # nor the option nor anything a person would search for. In the page the
 # order is right; this is here so it stays right.
 check("  and the addons load before %s builds the editor" % EDITOR_SCRIPT,
+      # the script tag itself: a comment can mention app.js anywhere
       template_text.find("addon/search/search.min.js")
-      < template_text.find(EDITOR_SCRIPT),
+      < template_text.find("filename='%s'" % EDITOR_SCRIPT),
       "search.js at %d, %s at %d"
       % (template_text.find("addon/search/search.min.js"), EDITOR_SCRIPT,
-         template_text.find(EDITOR_SCRIPT)))
+         template_text.find("filename='%s'" % EDITOR_SCRIPT)))
 
 check("  and the search bar is given a usable width",
       ".CodeMirror-dialog input" in style_text)
@@ -333,5 +334,49 @@ _missing = [os.path.basename(t) for t in sorted(_glob.glob(os.path.join(_tpl_dir
             and 'localStorage.getItem("webide-theme")' not in open(t).read()]
 check("every page with the app's stylesheet follows the editor's theme",
       not _missing, ", ".join(_missing))
+
+
+# Notes are a button for anyone reading notes they did not write, not a tab:
+# a student never edits them, and a tab beside index.html read as another
+# file to type in. Whoever owns the notes keeps the tab, for Edit source —
+# except while teaching live, when the projector should match the class.
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_app_js = open(os.path.join(_root, "static", "app.js")).read()
+_index = open(os.path.join(_root, "templates", "index.html")).read()
+_live_js = open(os.path.join(_root, "static", "live.js")).read()
+_live_html = open(os.path.join(_root, "templates", "live.html")).read()
+check("the top bar has a place for the notes buttons, before Run",
+      -1 < _index.find('id="notes-buttons"') < _index.find('id="run"'))
+check("  shown to whoever does not own the notes, and to the teacher live",
+      "function notesAsButtons() { return !window.WEBIDE.authoring || !!liveCode; }" in _app_js)
+check("  redrawn when a lesson starts or ends",
+      re.search(r"function paintLive\(\) \{\s*renderTabs\(\);", _app_js) is not None)
+check("  each named for its file, without .md",
+      'b.textContent = name.replace(/\\.(md|markdown)$/i, "");' in _app_js)
+check("  and taken out of the tab strip for them",
+      re.search(r"function renderTabs\(\) \{[\s\S]{0,200}"
+                r"return !\(notesAsButtons\(\) && window\.WebIDENotes\.isMarkdown\(name\)\);",
+                _app_js) is not None)
+check("  a second press goes back to the page",
+      "if (active === name) switchTo(lastCodeFile);" in _app_js)
+check("  and the class's teacher pane names them without .md",
+      'data.filename.replace(/\\.(md|markdown)$/i, "") : data.filename' in _live_js
+      and "live.filename.rsplit('.', 1)[0]" in _live_html)
+
+
+check("the page drawing itself never covers the notes",
+      re.search(r"function render\(name, sent\) \{[\s\S]{0,900}"
+                r"if \(!window\.WebIDENotes\.isMarkdown\(active\)\) showPreview\(\);", _app_js)
+      is not None, "the editor opened on the notes and covered them at once")
+check("  and Run, with the notes up, goes back to the code the proper way",
+      re.search(r"function run\(\) \{\s*(//[^\n]*\n\s*)*"
+                r"if \(window\.WebIDENotes\.isMarkdown\(active\)\) switchTo\(lastCodeFile\);",
+                _app_js) is not None)
+
+
+check("  and whatever shows the page closes the notes properly",
+      re.search(r"function showPreview\(\) \{[^}]*?if \(window\.WebIDENotes\.isMarkdown\(active\) && !mdSourceOpen\) \{\s*"
+                r"active = lastCodeFile;\s*renderTabs\(\);", _app_js) is not None,
+      "after a Run the button stayed lit and took two presses to show the notes")
 
 done()

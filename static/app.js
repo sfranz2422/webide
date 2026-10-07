@@ -228,6 +228,16 @@
   function showPreview() {
     notesView.hidden = true;
     previewView.hidden = false;
+    /* Whatever put the page up — Run, the syntax card, a game — the notes
+       are no longer on show, so the editor must stop saying they are.
+       Otherwise their button stayed lit after a Run, and the first press
+       "closed" notes that were already hidden: it took two presses to see
+       them again. While the author has the source open the .md is what
+       they are editing, and it stays the open file. */
+    if (window.WebIDENotes.isMarkdown(active) && !mdSourceOpen) {
+      active = lastCodeFile;
+      renderTabs();
+    }
   }
 
   /* Always as slides when the notes have `---` in them, with ◀ ▶ under
@@ -291,14 +301,60 @@
     editor.focus();
   }
 
+  /* NOTES ARE A BUTTON, NOT A TAB, for anyone reading notes they did not
+     write — a student on an assignment, a shared link. They never edit the
+     .md, so a tab beside index.html read as another file to type in, and
+     once they went back to the page nothing said where the instructions had
+     gone. A button in the top bar, named for the file (instructions.md is
+     "instructions"), shows them and stays there to show them again.
+
+     Whoever owns the notes — the teacher on their assignment, a student in
+     their own project — keeps the tab, because that is where Edit source is.
+
+     EXCEPT WHILE TEACHING LIVE. The teacher's editor is on the projector
+     then, and a class whose own page has the notes as a button was being
+     shown them as a tab. So live, the teacher gets the button too; Edit
+     source is still in the notes pane it opens. A function, not a flag,
+     because going live and ending a lesson both change the answer. */
+  function notesAsButtons() { return !window.WEBIDE.authoring || !!liveCode; }
+  var notesBar = $("notes-buttons");
+
+  function renderNotesButtons() {
+    if (!notesBar) return;
+    notesBar.textContent = "";
+    if (!notesAsButtons()) return;
+    fileNames().filter(window.WebIDENotes.isMarkdown).forEach(function (name) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn notes-btn";
+      var on = name === active;
+      b.setAttribute("aria-pressed", String(on));
+      b.textContent = name.replace(/\.(md|markdown)$/i, "");
+      b.title = on ? "Back to the page" : "Show " + name;
+      b.addEventListener("click", function () {
+        // A second press goes back to the page, so it works as a toggle.
+        if (active === name) switchTo(lastCodeFile);
+        else switchTo(name);
+      });
+      notesBar.appendChild(b);
+    });
+  }
+
   function renderTabs() {
     tabsEl.textContent = "";
-    fileNames().forEach(function (name) {
+    renderNotesButtons();
+    fileNames().filter(function (name) {
+      return !(notesAsButtons() && window.WebIDENotes.isMarkdown(name));
+    }).forEach(function (name) {
       var tab = document.createElement("button");
       tab.type = "button";
-      tab.className = "tab" + (name === active ? " tab-on" : "");
+      // With the notes up from their button, the editor still holds the
+      // code file, so that tab stays lit rather than none at all.
+      var on = name === active || (notesAsButtons() && name === lastCodeFile
+                                   && window.WebIDENotes.isMarkdown(active));
+      tab.className = "tab" + (on ? " tab-on" : "");
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", String(name === active));
+      tab.setAttribute("aria-selected", String(on));
 
       var label = document.createElement("span");
       label.textContent = name;
@@ -475,7 +531,12 @@
     if (files[name] === undefined) name = ENTRY;
     page = name;
 
-    showPreview();
+    /* Not over the notes. The page draws itself on load and again on every
+       pause in typing, and switching the pane each time hid the notes a
+       student was reading — on load the editor opened on the notes and this
+       covered them at once, with their tab (now their button) still lit.
+       The page still builds underneath; Run is what brings it into view. */
+    if (!window.WebIDENotes.isMarkdown(active)) showPreview();
     clearOutput();
 
     token = "w" + Date.now() + Math.random().toString(36).slice(2, 8);
@@ -513,6 +574,9 @@
   var hasRun = false;
 
   function run() {
+    // Run shows the page, so with the notes up it goes back to the code —
+    // through switchTo, which lights the right tab and button as it goes.
+    if (window.WebIDENotes.isMarkdown(active)) switchTo(lastCodeFile);
     trail = [];
     render(ENTRY);
     sharedPage = lastBuilt;
@@ -1190,6 +1254,7 @@
     });
 
     function paintLive() {
+      renderTabs();          // live, the notes are a button (notesAsButtons)
       if (liveCode) {
         liveBtn.textContent = "End lesson";
         liveBtn.classList.add("btn-live-on");
