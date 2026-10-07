@@ -62,7 +62,7 @@ def done():
 client = A.app.test_client()
 
 # ---------------------------------------------------------------- the page
-r = client.get("/new")
+r = client.get("/")
 check("the editor loads", r.status_code == 200, "%d bytes" % len(r.data))
 page = r.data.decode()
 
@@ -167,7 +167,7 @@ check("the vendored library and sprites are gone",
 r = client.get("/game")
 check("an old /game link redirects instead of 404ing",
       r.status_code in (301, 302), "%d" % r.status_code)
-check("  to the editor", r.headers.get("Location", "").endswith("/new"),
+check("  to the editor", r.headers.get("Location", "").endswith("/"),
       r.headers.get("Location"))
 
 # --------------------------------------------------------- the editor wiring
