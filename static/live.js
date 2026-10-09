@@ -369,7 +369,7 @@
       } else {
         note("Could not save here — keep this tab open");
       }
-      autosave();
+      autosave(false);
     }, 500);
   }
   mine.on("change", changed);
@@ -591,23 +591,61 @@
       });
   }
 
-  function autosave() {
+  /* TURNED IN FOR THEM, as in the editor (account.js): changed work on an
+     assignment lesson goes in every AUTO_TURN_IN and as the page closes,
+     riding on an ordinary autosave with turn_in: true. Students typed along
+     all lesson and never pressed Turn in. */
+  var AUTO_TURN_IN = 120000;
+  var changedSinceTurnIn = false;
+
+  function autosaveBody(turn) {
+    var body = {
+      code: mainSource(),               // theirs, never the mirror's
+      /* Every file, index.html included, because this route REPLACES them
+         and refuses a map without index.html. It was sent `{}` once, when
+         the page had only one editor — and was answered 400 on every
+         autosave, so after the first Save nothing a student typed reached
+         their project, while the page went on saying "Saved". */
+      files: allFiles(),
+      title: L.title || "Live lesson"
+    };
+    if (turn) body.turn_in = true;
+    return stamp(body);
+  }
+
+  function turnedIn(when) {
+    changedSinceTurnIn = false;
+    if (turnInBtn) turnInBtn.textContent = "Turn in again";
+    savedNow("Turned in" + (when ? " " + when : ""));
+  }
+  document.addEventListener("pyide:turnedin", function (e) {
+    turnedIn((e.detail && e.detail.when) || "");
+  });
+
+  setInterval(function () {
+    if (changedSinceTurnIn && canTurnIn && draftSlug && !stale) autosave(true);
+  }, AUTO_TURN_IN);
+
+  window.addEventListener("pagehide", function () {
+    if (!changedSinceTurnIn || !canTurnIn || !draftSlug || stale || !L.signedIn) return;
+    try {
+      fetch("/api/draft/" + encodeURIComponent(draftSlug), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(autosaveBody(true)),
+        keepalive: true
+      });
+    } catch (e) { /* nothing more we can do from here */ }
+  });
+
+  function autosave(turn) {
     if (stale) return;
     if (!draftSlug) { keepQuietly(); return; }
     if (!L.signedIn) return;
     fetch("/api/draft/" + encodeURIComponent(draftSlug), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(stamp({
-        code: mainSource(),               // theirs, never the mirror's
-        /* Every file, index.html included, because this route REPLACES them
-           and refuses a map without index.html. It was sent `{}` once, when
-           the page had only one editor — and was answered 400 on every
-           autosave, so after the first Save nothing a student typed reached
-           their project, while the page went on saying "Saved". */
-        files: allFiles(),
-        title: L.title || "Live lesson"
-      }))
+      body: JSON.stringify(autosaveBody(turn))
     }).then(function (res) {
       if (res.status === 404) {
         /* The project was deleted from another tab, or from My projects.
@@ -625,6 +663,8 @@
     }).then(function (data) {
       if (data && data.stale) { goneStale(data.error); return; }
       saw(data);
+      if (data && data.turned_in_at) { turnedIn(data.turned_in_at); return; }
+      if (!turn) changedSinceTurnIn = true;
       if (data && data.saved_at) savedNow("Saved " + data.saved_at);
     }).catch(function () {
       if (saveState) saveState.textContent = "Not saved — still in this browser";
