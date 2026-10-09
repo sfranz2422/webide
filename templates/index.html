@@ -236,6 +236,8 @@
       <div class="pane-head">
         <span id="notes-name">Notes</span>
         {% if authoring %}
+          <a class="linkbtn" href="{{ url_for('help_questions') }}" target="_blank" rel="noopener"
+             title="How to write ```quiz questions in these notes">Question formats</a>
           <button id="notes-edit" class="linkbtn">Edit source</button>
         {% endif %}
       </div>
