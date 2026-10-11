@@ -463,6 +463,27 @@
     });
   }
 
+  /* PICTURES IN THE NOTES, for a teacher (pictures.js; the server refuses
+     anyone else). Add picture opens the source first, so the teacher sees
+     where it lands; paste and drop work only while the .md source is in the
+     editor — the same CodeMirror holds index.html, and a picture dropped on
+     code is left to the browser as it always was. */
+  var notesPicBtn = $("notes-pic");
+  if (notesPicBtn && notesEditBtn) {
+    window.WebIDEPictures.attach(editor, function () {
+      return mdSourceOpen && window.WebIDENotes.isMarkdown(active);
+    });
+    notesPicBtn.addEventListener("click", function () {
+      if (!window.WebIDENotes.isMarkdown(active)) return;
+      if (!mdSourceOpen) notesEditBtn.click();
+      var doc = docs[active];
+      window.WebIDEPictures.choose(function (files) {
+        window.WebIDEPictures.insertInto(doc, files);
+        editor.focus();
+      });
+    });
+  }
+
   renderTabs();
 
   /* A shared assignment should open on the notes, not on the markup. */
