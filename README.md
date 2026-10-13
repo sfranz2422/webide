@@ -56,6 +56,8 @@ git push                        # Render redeploys
 After a deploy, do a hard refresh in the browser (Cmd+Shift+R or
 Ctrl+Shift+R) so it loads the new code.
 
+It's free to use, change and share under the MIT license (see `LICENSE`).
+
 ---
 
 ## How student code runs, and why it's safe
