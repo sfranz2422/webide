@@ -205,6 +205,11 @@
             people click it at once and none of them should lose their work. #}
         <div id="mirror-notes" class="notes-body prose" hidden></div>
       </div>
+      {#  Handles (split.js): each sizes the pane before it — or after it,
+          with data-size="next" — and the rest goes to the pane that fills.
+          Students drag them; the sizes are kept in their browser. A handle
+          beside a hidden pane is hidden with it. #}
+      <div class="resizer resizer-x" data-split="live-mirror-code"></div>
       <div id="teacher-output-view" class="live-mirror-out" hidden>
         <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s page</span></div>
         <div class="preview-wrap">
@@ -217,6 +222,8 @@
         </div>
       </div>
     </div>
+
+    <div class="resizer resizer-y" data-split="live-mirror"></div>
 
     <div class="live-pane live-mine">
       {#  Tabs, like the editor's: index.html and every other file in their
@@ -240,6 +247,8 @@
     </div>
   </section>
 
+  <div class="resizer resizer-x" data-split="live-left"></div>
+
   <section class="pane pane-right live-right">
     {#  The student's own page, rendered. Same sandboxed frame the editor
         uses — no same-origin access, so nothing they write can reach this
@@ -251,6 +260,11 @@
                 sandbox="allow-scripts allow-forms"></iframe>
       </div>
     </div>
+
+    {#  The page is what fills this column, so these two size the pane
+        BELOW them: the console strip (not while it is folded to its head)
+        and the notes. #}
+    <div class="resizer resizer-y" data-split="live-console" data-size="next"></div>
 
     <div id="output-view" class="subpane live-console is-folded">
       {#  Theirs alone: the teacher's console is beside the teacher's code,
@@ -274,6 +288,7 @@
         the .md tab open. Rendered by notes.js, which sanitises the HTML and
         opens every link in a new tab, so thirty students clicking a link at
         once lose nothing. Hidden when the project has no notes. #}
+    <div class="resizer resizer-y" data-split="live-notes" data-size="next"></div>
     <div id="live-notes-view" class="subpane live-notes" hidden>
       {#  The arrows are under the notes (notes.js, slideView); this is the
           way back to the teacher's slide for a student who has gone ahead
@@ -337,6 +352,7 @@
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>
+<script src="{{ url_for('static', filename='split.js') }}"></script>
 {% endif %}
 <script src="{{ url_for('static', filename='live.js') }}"></script>
 

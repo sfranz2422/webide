@@ -84,6 +84,15 @@ The student's editor is never written to from the network, and the teacher's
 pane is `user-select: none` with copy and cut refused. There is deliberately
 no button that copies the teacher's code down.
 
+**Handles between the panes** (`static/split.js`, from PyIDE), on the
+class's page and in the editor. Each sizes the pane before it, except the
+ones marked `data-size="next"`, which size the pane after: the page is the
+pane that fills on both, so the console, the notes and "Class sees" under
+it are sized from above. Sizes are kept per browser in localStorage
+(`webide-split:*`) and dropped below 861px, where the page stacks. The
+handles are `.resizer`, never `.split` — that is the editor's `<main>`, and
+in PyIDE handles named `.split` once blanked every editor page.
+
 **A lesson for an assignment starts the student's editor** where
 `/a/<slug>` would: their own draft of it if they have one, else the
 assignment's copy of the file the live Save writes back to. It is rendered

@@ -2266,6 +2266,63 @@ check("a lesson with no assignment opens as itself",
       stranger.get("/live/" + _plain).status_code == 200
       and "moved" not in stranger.get("/api/live/%s?v=-1" % _plain).get_json())
 
+
+# ------------------------------------------------------------- handles
+# HANDLES BETWEEN THE PANES (split.js), on the class's page and the editor.
+# Every fixed split was wrong for somebody, so students drag them. The page
+# is the pane that fills on both pages, so the panes under it are sized from
+# above (data-size="next"), and the pane after a sized one takes what is
+# left — with a basis of its own it shrank alongside the one being dragged.
+print("\nHandles between the panes")
+_live_page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>',
+                     _live_page)
+check("every pane on the class's page has a handle",
+      sorted(n for _, n, _ in _splits) == sorted(["live-mirror-code", "live-mirror", "live-left",
+                                                  "live-console", "live-notes"])
+      and ("y", "live-console", ' data-size="next"') in _splits
+      and ("y", "live-notes", ' data-size="next"') in _splits
+      and -1 < _live_page.find("/static/split.js") < _live_page.find("/static/live.js"),
+      _splits)
+check("  which tells both editors when a size changes",
+      re.search(r"WebIDESplit\.attachAll\(document, \{[^}]*onResize: function \(\) "
+                r"\{ mirror\.refresh\(\); mine\.refresh\(\); \}", live_js) is not None,
+      "CodeMirror measures itself only on a window resize")
+_editor_page = teacher.get("/new").get_data(as_text=True)
+_ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>',
+                        _editor_page)
+check("the editor has handles too",
+      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-preview"]
+      and ("y", "editor-class", ' data-size="next"') in _ed_splits
+      and -1 < _editor_page.find("/static/split.js") < _editor_page.find("/static/app.js"),
+      _ed_splits)
+check("  and a student's has no handle for a Class sees it does not have",
+      'data-split="editor-class"' not in stranger.get("/new").get_data(as_text=True))
+check("  which tell its editor when a size changes",
+      re.search(r"WebIDESplit\.attachAll\(document, \{[^}]*onResize: function \(\) "
+                r"\{ editor\.refresh\(\); \}",
+                open(os.path.join(WEBIDE, "static", "app.js")).read()) is not None)
+# The handles were `.split` once in PyIDE, which is the editor's <main>: every
+# editor page went blank under the toolbar. Only the editor's rules may name it.
+_split_rules = re.findall(r"(?m)^[^/*\n]*\.split\b(?!-)\s*[,{][^\n]*", css)
+check("  without touching the editor, whose <main> is .split",
+      len(_split_rules) == 3 and '<main class="split">' in _editor_page, _split_rules)
+check("  and a handle beside a hidden pane goes with it",
+      '.resizer:has(+ [hidden]), [hidden] + .resizer:not([data-size="next"]) { display: none; }' in css
+      and ".live-mirror-code:has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }" in css)
+check("  the pane after a sized one takes what is left",
+      '.is-sized + .resizer:not([data-size="next"]) + * { flex-basis: 0; }' in css,
+      "the teacher's code dragged 100px taller grew 48")
+check("  and a folded console is its head, with no handle",
+      ".live-console.is-folded { flex: 0 0 auto !important; }" in css
+      and ".resizer:has(+ .is-folded) { display: none; }" in css,
+      "a dragged size is inline and beat the fold")
+check("  and none on a narrow screen, where the page stacks",
+      re.search(r"@media \(max-width: 860px\) \{\s*\.resizer \{ display: none; \}", css) is not None)
+_split_js = open(os.path.join(WEBIDE, "static", "split.js")).read()
+check("  sizes kept as WebIDE's own, not PyIDE's",
+      'var PREFIX = "webide-split:";' in _split_js and "window.WebIDESplit =" in _split_js)
+
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"
       % ("SOME FAILED" if bad else "ALL PASSED", len(results), bad))

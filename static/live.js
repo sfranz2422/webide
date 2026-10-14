@@ -1208,6 +1208,15 @@
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
 
+  /* The handles between the panes (split.js). Both editors are told,
+     because CodeMirror measures itself only on a window resize, and a pane
+     dragged narrower would otherwise keep a scrollbar for the old width.
+     The previews are iframes at 100% of their pane and follow by themselves. */
+  window.WebIDESplit.attachAll(document, {
+    wide: window.matchMedia ? window.matchMedia("(min-width: 861px)") : null,
+    onResize: function () { mirror.refresh(); mine.refresh(); }
+  });
+
   // ----------------------------------------------------------------- theme
   /* The editor's light/dark button, on the same localStorage key, so a choice
      made in either place holds in both. The <head> script has already set

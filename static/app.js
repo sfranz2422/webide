@@ -876,6 +876,15 @@
     });
   }
 
+  /* The handles between the panes (split.js), the same ones the class's live
+     page has. The editor is told, because CodeMirror measures itself only
+     on a window resize. The preview is an iframe at 100% of its pane and
+     follows by itself. */
+  window.WebIDESplit.attachAll(document, {
+    wide: window.matchMedia ? window.matchMedia("(min-width: 861px)") : null,
+    onResize: function () { editor.refresh(); }
+  });
+
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */
   /* The safety net for anyone not signed in — attached before the account
