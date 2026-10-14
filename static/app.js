@@ -1114,13 +1114,54 @@
        page, picks the lesson back up. */
     var HOST_KEY = "webide-live-host";
     try { localStorage.removeItem(HOST_KEY); } catch (e) { /* the old, shared marker */ }
-    var rememberLive = function (code) {
+    var rememberLive = function (code, slug) {
       try {
-        sessionStorage.setItem(HOST_KEY, JSON.stringify({ code: code, path: location.pathname }));
+        sessionStorage.setItem(HOST_KEY, JSON.stringify({ code: code, path: location.pathname,
+                                                          slug: slug || "" }));
       } catch (e) { /* storage blocked: a reload will need Go live again */ }
     };
     var forgetLive = function () {
-      try { sessionStorage.removeItem(HOST_KEY); } catch (e) {}
+      try {
+        sessionStorage.removeItem(HOST_KEY);
+        sessionStorage.removeItem(FILES_KEY);
+      } catch (e) {}
+    };
+
+    /* WHAT WAS ON SCREEN, for a reload mid-lesson. Go live from the class
+       page teaches on /new, the editor's blank page, and clears the lesson
+       out of the address bar — so a reload there came back as the default
+       template, resumed the broadcast, and sent that template to the class
+       over the lesson's last code. The teacher's work was gone from the
+       editor AND from the server, with nothing saying so (found in PyIDE,
+       mid-lesson). Now the tab keeps its files as it unloads
+       (sessionStorage: this tab only, gone when it closes) and a reload puts
+       them back before it goes back on the air. Written on pagehide rather
+       than every push: data files can be large, and a reload is the only
+       thing this is for. */
+    var FILES_KEY = "webide-live-files";
+    window.addEventListener("pagehide", function () {
+      if (!liveCode) return;
+      var all = allFiles();
+      try {
+        sessionStorage.setItem(FILES_KEY, JSON.stringify({
+          code: liveCode, path: location.pathname, files: all, active: active,
+          title: ($("title") && $("title").value) || ""
+        }));
+      } catch (e) {
+        // Too big for storage: the reload falls back on the lesson's last file.
+        try { sessionStorage.removeItem(FILES_KEY); } catch (e2) {}
+      }
+    });
+    var keptFiles = function (code) {
+      try {
+        var kept = JSON.parse(sessionStorage.getItem(FILES_KEY) || "null");
+        return kept && kept.code === code && kept.path === location.pathname
+          && kept.files && typeof kept.files === "object" ? kept : null;
+      } catch (e) { return null; }
+    };
+    var liveSlug = function () {
+      try { return (JSON.parse(sessionStorage.getItem(HOST_KEY) || "null") || {}).slug || ""; }
+      catch (e) { return ""; }
     };
     var liveToResume = function () {
       try {
@@ -1463,7 +1504,7 @@
           var at = /^(\d+)\//.exec(data.slide || "");
           slideAt = at ? Math.max(0, parseInt(at[1], 10) - 1) : 0;
           lastSent = null;
-          rememberLive(liveCode);
+          rememberLive(liveCode, data.assignment);
           paintLive();
           pushNow();
           liveTimer = setInterval(pushNow, PUSH_MS);
@@ -1490,7 +1531,7 @@
        from a link, on the editor's home page, which never keeps unsaved
        work — so replacing what is on screen costs nothing and is not asked.
        A reload never comes back here; see the address bar cleared below. */
-    function teachAgain(code, slug) {
+    function teachAgain(code, slug, resuming) {
       function json(res) { return res.json(); }
       var starter = slug
         ? fetch("/api/live/assignment/" + encodeURIComponent(slug))
@@ -1511,8 +1552,26 @@
           docs[l.filename].setValue(l.body);
           switchTo(l.filename);           // and so the first push sends it
         }
-        startLive(undefined, "", code);
+        if (resuming) startLive(undefined, code);
+        else startLive(undefined, "", code);
       });
+    }
+
+    /* Back from a reload mid-lesson: the tab's own files if it kept them
+       (see FILES_KEY), else the lesson rebuilt as Teach again builds it —
+       which only /new needs, since any other page loaded its own project. */
+    function resumeLive(code) {
+      var kept = keptFiles(code);
+      if (kept) {
+        loadStarter(kept.files);
+        if (kept.active && docs[kept.active]) switchTo(kept.active);
+        if ($("title") && kept.title) $("title").value = kept.title;
+        startLive(undefined, code);
+      } else if (location.pathname === "/new") {
+        teachAgain(code, liveSlug(), true);
+      } else {
+        startLive(undefined, code);
+      }
     }
 
     liveBtn.addEventListener("click", function () {
@@ -1556,7 +1615,7 @@
         // server keeps whatever the session already had. The code is sent so
         // the server can refuse anything but that same lesson — see live_start.
         var resumeCode = liveToResume();
-        if (resumeCode) startLive(undefined, resumeCode);
+        if (resumeCode) resumeLive(resumeCode);
       } catch (e) { /* storage blocked: press Go live again */ }
     }
   } else {
@@ -1565,6 +1624,7 @@
        here rather than let it wait for the next teacher to sign in. */
     try {
       sessionStorage.removeItem("webide-live-host");
+      sessionStorage.removeItem("webide-live-files");
       localStorage.removeItem("webide-live-host");      // the old, shared marker
     } catch (e) {}
   }
