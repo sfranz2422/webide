@@ -851,11 +851,30 @@
     }
   });
 
-  editor.on("change", function () {
+  editor.on("change", function (cm, change) {
     paintAuto();
     scheduleAuto();
     rescue.noteEdit();
+    // Typed, pasted or dropped — not a starter or a file put in by the page.
+    if (change.origin !== "setValue") typedHere = true;
   });
+
+  /* THE LOGO GOES TO THE FRONT DOOR — a student's classes, a teacher's
+     dashboard. A saved project has lost nothing by leaving: it autosaves,
+     and pagehide sends whatever is pending (account.js). A project with
+     nowhere to save to — the blank editor, before Save — is the one case
+     where a click on the logo would throw typing away without a word, so
+     that one asks. */
+  var typedHere = false;
+  var homeLink = document.getElementById("home-link");
+  if (homeLink) {
+    homeLink.addEventListener("click", function (e) {
+      if (window.WEBIDE.readonly || window.WEBIDE.draftSlug || !typedHere) return;
+      if (!window.confirm("Leave this page? What you've typed here isn't saved.")) {
+        e.preventDefault();
+      }
+    });
+  }
 
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */
