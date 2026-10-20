@@ -18,7 +18,8 @@
      is not one, or the teacher's own copy, there is nowhere to record an
      answer, and notes.js says so on the question rather than taking one. */
   window.WebIDENotes.setQuizContext({ assignment: window.WEBIDE.assignmentSlug,
-                                      signedIn: window.WEBIDE.signedIn });
+                                      signedIn: window.WEBIDE.signedIn,
+                                      viewOnly: window.WEBIDE.viewOnly });
   var frame = $("preview");
   var tabsEl = $("file-tabs");
 
