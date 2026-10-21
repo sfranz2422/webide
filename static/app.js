@@ -603,6 +603,27 @@
     render(ENTRY);
     sharedPage = lastBuilt;
     hasRun = true;
+    xpWatch = { token: token, failed: false };
+  }
+
+  /* XP for a page that worked (xp.js). A page has no "finished": it counts
+     when Run is pressed — not the redraw on every pause in typing — the page
+     loads, and no error comes back from it in the next moment and a half.
+     The server decides whether it pays; this only says it worked. */
+  var xpWatch = null;
+  var XP_CODE = /\.(html?|css|js)$/i;
+  function xpLoaded() {
+    var w = xpWatch;
+    if (!w || w.token !== token) return;
+    setTimeout(function () {
+      if (xpWatch === w && !w.failed && token === w.token) reportRun();
+      if (xpWatch === w) xpWatch = null;
+    }, 1500);
+  }
+  function reportRun() {
+    if (!window.WEBIDE.signedIn || window.WEBIDE.viewOnly || window.WEBIDE.readonly ||
+        window.WEBIDE.isTeacher || !window.PyIDEXP) return;
+    window.PyIDEXP.ran(allFiles(), XP_CODE);
   }
 
   /* Follow a link or a form's action to another of the student's pages. */
@@ -786,11 +807,13 @@
     // only the live preview may write to the console
     if (e.source !== frame.contentWindow) return;
 
+    if (data.kind === "error" && xpWatch) xpWatch.failed = true;
     if (data.kind === "ready") {
       setBusy(false);
       if (!outputEl.textContent.trim()) {
         write("Page loaded. console.log messages appear here.\n", "dim");
       }
+      xpLoaded();
       return;
     }
 

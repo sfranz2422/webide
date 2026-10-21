@@ -1270,6 +1270,22 @@
     var built = window.WebIDERun.assemble(files, token, ENTRY, null);
     setBusy(true);
     freshFrame().srcdoc = built.html;
+    xpWatch = { token: token, failed: false };
+  }
+
+  /* XP for their page working: loaded, and no error from it in the next
+     moment and a half (app.js says why). Theirs only — the mirror is never
+     run here. */
+  var xpWatch = null;
+  function xpLoaded() {
+    var w = xpWatch;
+    if (!w || w.token !== token) return;
+    setTimeout(function () {
+      if (xpWatch === w && !w.failed && token === w.token && L.signedIn && window.PyIDEXP) {
+        window.PyIDEXP.ran(allFiles(), /\.(html?|css|js)$/i);
+      }
+      if (xpWatch === w) xpWatch = null;
+    }, 1500);
   }
 
   function stopRun() {
@@ -1295,9 +1311,11 @@
       if (!outputEl.textContent.trim()) {
         write("Page loaded. console.log messages appear here.\n", "dim");
       }
+      xpLoaded();
       return;
     }
     if (data.kind === "error") {
+      if (xpWatch) xpWatch.failed = true;
       write(String(data.text) + "\n", "err");
       return;
     }
