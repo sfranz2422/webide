@@ -150,7 +150,7 @@ Students earn XP for questions the notes mark themselves (`XP_PER_POINT` a
 point, part for part right), for answering every question in the notes, for
 full marks on an assignment with an `xp_bonus`, from the teacher by hand
 (`/teacher/class/<id>/xp`, negative takes it back), and for a program that
-ran without an error. It makes levels, badges and tokens (one per 500 XP),
+ran without an error. It makes levels, badges and tokens (one per `TOKEN_EVERY`, 1000 XP),
 all worked out from the total and never stored; `users.tokens_used` is the
 only token state, lowered by Use with a conditional UPDATE. **Nothing here
 touches a grade** — the teacher trades tokens for points by hand.
@@ -235,7 +235,11 @@ posted, never a total a page claims. A verified result older than the last
 turn-in is shown stale (⟳). PyIDE has the same feature for Python, with its
 own format; the routes and the table are the same. autograde.js reads a
 block exactly as autograde.py; `test_autograde.py` holds them together and
-runs the checks in headless Chrome (it needs Chrome and `../pyide/node_modules/ws`).
+runs the checks in headless Chrome (it needs Chrome and `../pyide/node_modules/ws`). Each test the teacher's check finds passing also pays
+`XP_PER_POINT` XP a point, once per test (`_tests_xp`, source
+`test:<assignment>:<label hash>`), so checking again never pays twice and
+fixed code is paid only for what now passes; a student's own check pays
+nothing.
 
 ## Style
 

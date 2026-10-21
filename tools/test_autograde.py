@@ -272,6 +272,7 @@ check("contains and logs ignore case and spacing",
 print("\nThe server")
 import app as P                                              # noqa: E402
 import accounts                                              # noqa: E402
+import xp                                                    # noqa: E402
 
 
 def add_user(sub, email, name):
@@ -351,6 +352,21 @@ check("  nobody else can", other.get("/api/assignment/%s/tests/work" % SLUG).sta
 r = teacher.post("/api/assignment/%s/tests/verify" % SLUG, json={"student": AMY, "results": ALL_RIGHT})
 check("the teacher's check counts: 14 / 14 is the total", r.status_code == 200
       and r.get_json()["total"] == "14", r.get_json())
+
+
+def test_xp(uid):
+    db = P.SessionLocal()
+    try:
+        return sum(a.xp for a in db.query(accounts.XpAward).filter(
+            accounts.XpAward.user_id == uid, accounts.XpAward.source.like("test:%")))
+    finally:
+        db.close()
+
+
+check("  and pays XP_PER_POINT a point for the tests that pass",
+      test_xp(AMY) == 14 * xp.XP_PER_POINT, test_xp(AMY))
+teacher.post("/api/assignment/%s/tests/verify" % SLUG, json={"student": AMY, "results": ALL_RIGHT})
+check("  checking again pays nothing twice", test_xp(AMY) == 14 * xp.XP_PER_POINT, test_xp(AMY))
 BLUE = (ran.get("blue") or {}).get("results") or [dict(x, ok=x["label"] != "h1 color is red")
                                                    for x in ALL_RIGHT]
 r = teacher.post("/api/assignment/%s/tests/verify" % SLUG,
@@ -392,6 +408,13 @@ check("the teacher's edit page links to how to write tests",
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
 check("the editor has Check my work and loads autograde.js",
       'id="check"' in editor and "autograde.js" in editor)
+
+# Ben fixes his work: the next check pays the tests that now pass, only.
+before = test_xp(BEN)
+teacher.post("/api/assignment/%s/tests/verify" % SLUG, json={"student": BEN, "results": ALL_RIGHT})
+check("fixed work is paid for the tests that now pass, and only those",
+      0 < before < 14 * xp.XP_PER_POINT and test_xp(BEN) == 14 * xp.XP_PER_POINT,
+      (before, test_xp(BEN)))
 
 print()
 failed = results.count(False)
