@@ -55,6 +55,31 @@
     </section>
   {% endfor %}
 
+  {#  Tests: autograde.py has the format; test_autograde.py checks this
+      example parses, so the help can't drift from what is accepted. #}
+  <h2 id="tests">Tests — Check my work and Check all</h2>
+  <p>A <code>tests</code> block in an assignment's notes is checked against the student's page,
+    as a browser shows it. Students press <strong>Check my work</strong> as often as they like.
+    On the assignment's page, <strong>Check all</strong> runs what each student turned in, in
+    your browser, and only that result is added to their grade. One test per line; each is
+    1 point unless the line ends with <code>(2 points)</code>.</p>
+  <pre class="help-src" id="tests-example">```tests
+has h1                                at least one h1 (has 3 li: at least three)
+has exactly 2 img                     exactly two
+h1 contains Welcome                   the first h1's text contains it
+img has alt                           every img has an alt attribute
+links to about.html                   a link going there
+h1 color is red                       the style the browser shows
+click #btn -&gt; #out contains 1        click the first #btn, then check
+logs Hello                            console.log printed it
+uses addEventListener                 the JavaScript has that word (avoids: hasn't)
+defines greet                         a function greet in the JavaScript
+about.html: has h2       (2 points)   any line, on another page
+# a line starting with # is a comment
+```</pre>
+  <p class="dim">"contains" and "logs" ignore capitals and extra spaces. A page still busy after
+    8 seconds fails its checks and says why.</p>
+
   <h2>Slides</h2>
   <p>A line with only <code>---</code> on it starts a new slide. A question can go on any slide.</p>
 

@@ -658,6 +658,63 @@
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stop);
+
+  /* Check my work: the tests in the notes (autograde.js), run here on the
+     page as it is in the editor now, as often as the student likes. It is
+     feedback: the result is kept for the teacher to see, but what counts is
+     the teacher's Check all on what was turned in — a check run in this
+     browser could be faked. Shown only when the notes have tests. */
+  var checkBtn = $("check");
+  var checking = false;
+
+  function testsHere() {
+    return window.WebIDETests ? window.WebIDETests.fromFiles(allFiles()).tests : [];
+  }
+
+  function refreshCheck() {
+    if (checkBtn) checkBtn.hidden = !testsHere().length;
+  }
+
+  async function checkWork() {
+    if (checking) return;
+    var files = allFiles(), tests = testsHere();
+    if (!tests.length) return;
+    checking = true;
+    checkBtn.disabled = true;
+    if (window.WebIDENotes.isMarkdown(active)) switchTo(lastCodeFile);
+    showPreview();
+    clearOutput();
+    write("Checking your page against " + tests.length + " test" +
+          (tests.length === 1 ? "" : "s") + "…\n", "dim");
+    try {
+      var got = await window.WebIDETests.run(files, tests);
+      clearOutput();
+      got.results.forEach(function (r) {
+        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
+        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
+      });
+      var all = got.earned === got.possible;
+      write("\n" + got.earned + " of " + got.possible + " points" +
+            (all ? " — every test passes." : ".") + "\n");
+      write("This check is for you. What counts is your teacher's check of what " +
+            "you turn in.\n", "dim");
+      if (window.WEBIDE.signedIn && window.WEBIDE.assignmentSlug && !window.WEBIDE.viewOnly) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: window.WEBIDE.assignmentSlug, results: got.results })
+        }).catch(function () {});
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      checking = false;
+      checkBtn.disabled = false;
+    }
+  }
+  if (checkBtn) {
+    checkBtn.addEventListener("click", checkWork);
+    refreshCheck();
+  }
   if (backBtn) backBtn.addEventListener("click", goBack);
 
   /* A link to another site, opened on the preview's behalf.

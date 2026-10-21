@@ -32,7 +32,7 @@ failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
 **`node` is required** by `test_quiz.py`, `test_rescue.py`,
-`test_tabstops.py`, `test_xp.py` and `test_keep_place.py`: they load this repo's own JavaScript and drive it, rather
+`test_tabstops.py`, `test_xp.py`, `test_keep_place.py` and `test_autograde.py`: they load this repo's own JavaScript and drive it, rather
 than grepping it — which is the only way those get checked at all.
 `brew install node` if it is missing.
 
@@ -213,6 +213,29 @@ to its student and the teachers of their classes, never cached, and is on
 no board; approving makes it their avatar (`"photo:<slug>"`), rejecting
 deletes it. They are not `images`, because `/img/<slug>` serves anyone with
 the address. The page crops and shrinks a photo to 400px before sending.
+
+**Tests: Check my work and Check all** (`autograde.py`,
+`static/autograde.js`, "Tests" in `app.py`, `/help/questions#tests`). A
+```` ```tests ```` block in an assignment's notes is checked against the
+student's page as a browser shows it, one test per line: `has 3 li`,
+`h1 contains Welcome`, `img has alt`, `links to about.html`,
+`h1 color is red`, `click #btn -> #out contains 1`, `logs Hello`, `uses` /
+`avoids` / `defines` on the JavaScript, and `about.html:` before a line for
+another page. Each page is built as the preview builds it (`assemble`) in a
+hidden frame with the preview's sandbox, a checker script put in after the
+bridge, and an 8-second limit so a page that never finishes fails instead
+of hanging. **They run in a browser, never on the server.** A student's Check
+my work runs in theirs — feedback, which could be faked, so it is kept
+(`TestResult`, kind "self") for the teacher to see and counts for nothing.
+The teacher's Check all runs every turned-in snapshot in the TEACHER's
+browser and posts kind "verified", which is added to the grade through
+`_earned` — every total goes through it, so Classroom, Skyward, My work,
+the class page and quests include it. Points are summed from the lines
+posted, never a total a page claims. A verified result older than the last
+turn-in is shown stale (⟳). PyIDE has the same feature for Python, with its
+own format; the routes and the table are the same. autograde.js reads a
+block exactly as autograde.py; `test_autograde.py` holds them together and
+runs the checks in headless Chrome (it needs Chrome and `../pyide/node_modules/ws`).
 
 ## Style
 
