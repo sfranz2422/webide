@@ -32,7 +32,7 @@ failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
 **`node` is required** by `test_quiz.py`, `test_rescue.py`,
-`test_tabstops.py` and `test_xp.py`: they load this repo's own JavaScript and drive it, rather
+`test_tabstops.py`, `test_xp.py` and `test_keep_place.py`: they load this repo's own JavaScript and drive it, rather
 than grepping it — which is the only way those get checked at all.
 `brew install node` if it is missing.
 
