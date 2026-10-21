@@ -102,14 +102,31 @@
     relayout();
   }
 
-  applyTheme(currentTheme(), false);
+  /* A theme bought in the shop (xp.js namedTheme): its own CodeMirror
+     colours, and the button offers the way back to light/dark. */
+  var named = window.PyIDEXP ? window.PyIDEXP.namedTheme() : "";
+  if (named) {
+    editor.setOption("theme", "pyide-" + named);
+    themeGlyph.textContent = "🎨";
+    themeBtn.title = "Your theme — click for ordinary light or dark";
+    themeBtn.setAttribute("aria-label", themeBtn.title);
+  } else {
+    applyTheme(currentTheme(), false);
+  }
   themeBtn.addEventListener("click", function () {
+    if (named) {
+      named = "";
+      window.PyIDEXP.clearTheme();
+      applyTheme(systemPrefersLight() ? "light" : "dark", true);
+      return;
+    }
     applyTheme(currentTheme() === "light" ? "dark" : "light", true);
   });
 
   if (window.matchMedia) {
     var mq = window.matchMedia("(prefers-color-scheme: light)");
     var onSystemChange = function () {
+      if (named) return;                      // a bought theme stays put
       var saved = null;
       try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
       if (saved !== "light" && saved !== "dark") {

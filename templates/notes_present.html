@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script>
   try {
-    var saved = localStorage.getItem("webide-theme");
-    if (saved === "light" || saved === "dark") {
+    var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("webide-theme");
+    if (saved) {
       document.documentElement.setAttribute("data-theme", saved);
     }
   } catch (e) {}

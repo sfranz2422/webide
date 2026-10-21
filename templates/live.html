@@ -18,8 +18,8 @@
      paint, so a room projecting in light mode never flashes dark. */
   (function () {
     try {
-      var saved = localStorage.getItem("webide-theme");
-      if (saved === "light" || saved === "dark") {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("webide-theme");
+      if (saved) {
         document.documentElement.setAttribute("data-theme", saved);
       }
       var size = parseInt(localStorage.getItem("webide-code-size"), 10);
