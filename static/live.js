@@ -1348,7 +1348,14 @@
         fetch("/api/tests/self", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assignment: L.assignment, results: got.results })
-        }).catch(function () {});
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
+            if (d && d.xp > 0 && window.PyIDEXP) {
+              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
+            }
+          })
+          .catch(function () {});
       }
     } catch (e) {
       write(String(e && e.message || e) + "\n", "err");
