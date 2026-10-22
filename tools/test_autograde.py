@@ -116,7 +116,10 @@ node = shutil.which("node")
 if not node:
     check("node is here", False, "brew install node")
     sys.exit(1)
-samples = [NOTES, "```tests\nnav a background-color is #333\nul > li contains  Milk  (3 points)\n```",
+check("#id starts a test; only # and a space is a comment",
+      [t["selector"] for t in autograde.parse("```tests\n#named color is red\n#\n#  note\n```")[0]]
+      == ["#named"])
+samples = [NOTES, "```tests\n#named background-color is rgb(255, 99, 71)  (2 points)\n# note\nnav a background-color is #333\nul > li contains  Milk  (3 points)\n```",
            "```tests\nmake it pretty\nabout.html: uses fetch\nhas exactly li\n```", "no block here",
            "```tests\nclick button.go -> has 4 li\nform has action  (1 point)\n```"]
 script = ("global.window={};eval(require('fs').readFileSync(%s,'utf8'));"
@@ -401,7 +404,7 @@ helppage = client().get("/help/questions").get_data(as_text=True)
 example = _html.unescape(re.search(r'id="tests-example">(.*?)</pre>', helppage, re.S).group(1))
 bare = "\n".join(re.split(r"\s{3,}", ln)[0] for ln in example.split("\n"))
 got, bad = autograde.parse(bare)
-check("the help page's example is all tests", len(got) == 11 and not bad, (len(got), bad))
+check("the help page's example is all tests", len(got) == 12 and not bad, (len(got), bad))
 authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
 check("the teacher's edit page links to how to write tests",
       'href="/help/questions#tests"' in authoring)

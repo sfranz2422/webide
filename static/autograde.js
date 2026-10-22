@@ -29,6 +29,7 @@ window.WebIDETests = (function () {
   var LOGS = /^logs\s+(.+)$/i;
   var CODE = /^(uses|avoids|defines)\s+(.+?)\s*$/i;
   var ATTR = /^(.+?)\s+has\s+([A-Za-z_:][-A-Za-z0-9_:.]*)$/i;
+  var COMMENT = /^#(\s|$)/;   // "#" and a space; "#named ..." is a test (autograde.py)
   var STYLE = /^(.+?)\s+([A-Za-z-]+)\s+is\s+(.+)$/i;
   var TIME_LIMIT_MS = 8000;
 
@@ -97,7 +98,7 @@ window.WebIDETests = (function () {
     var tests = [], errors = [];
     String(body || "").split("\n").forEach(function (raw, idx) {
       var line = raw.trim();
-      if (!line || line.charAt(0) === "#") return;
+      if (!line || COMMENT.test(line)) return;
       var whole = line, points = 1, m = POINTS.exec(line), t = null, page = "";
       if (m) {
         points = parseFloat(m[1]);

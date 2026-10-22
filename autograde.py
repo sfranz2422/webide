@@ -21,7 +21,8 @@ checked against the student's page as a browser shows it:
     defines greet                   a function greet in the JavaScript
     about.html: has h2              any line, on another page instead of
                                     index.html
-    # a comment                     ignored
+    #named color is red             an id is a selector like any other
+    # a comment                     ignored: # and then a space
 
 Each is worth 1 point, or "(2 points)" at the end of its line says so.
 
@@ -50,6 +51,11 @@ LINKS = re.compile(r"^links\s+to\s+(.+)$", re.I)
 LOGS = re.compile(r"^logs\s+(.+)$", re.I)
 CODE = re.compile(r"^(uses|avoids|defines)\s+(.+?)\s*$", re.I)
 ATTR = re.compile(r"^(.+?)\s+has\s+([A-Za-z_:][-A-Za-z0-9_:.]*)$", re.I)
+# A comment is "#" and a space (or "#" alone). "#" alone at the start was the
+# rule once, and it silently threw away every test written for an id —
+# "#named background-color is tomato" became a comment, no error, one test
+# fewer, and the block still looked fine to the teacher who wrote it.
+COMMENT = re.compile(r"^#(\s|$)")
 STYLE = re.compile(r"^(.+?)\s+([A-Za-z-]+)\s+is\s+(.+)$", re.I)
 
 
@@ -138,7 +144,7 @@ def parse_block(body):
     tests, errors = [], []
     for n, raw in enumerate((body or "").split("\n"), 1):
         line = raw.strip()
-        if not line or line.startswith("#"):
+        if not line or COMMENT.match(line):
             continue
         whole = line
         points = 1.0
