@@ -706,7 +706,15 @@
     try {
       var got = await window.WebIDETests.run(files, tests);
       clearOutput();
-      got.results.forEach(function (r) {
+      /* Under the slide each test is on (places): students check after
+         every step, and want the step they're on. */
+      var where = window.WebIDETests.places(files, window.WebIDENotes) || [], last = null;
+      got.results.forEach(function (r, i) {
+        var w = where[i];
+        if (w && w !== last) {
+          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
+          last = w;
+        }
         write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
         if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
       });
