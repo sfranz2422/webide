@@ -88,6 +88,9 @@
         <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
       </button>
       <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+      {#  Check my work: the tests in the teacher's notes, run on the
+          student's own page (autograde.js). Only while the notes have tests. #}
+      <button id="check" class="btn btn-check" hidden title="Run your teacher's tests on your page">✔ Check my work</button>
       {#  The editor's New tab button: THEIR page, in a tab of its own, on
           /play exactly as the editor sends it. #}
       <button id="run-tab" class="btn" type="button"
@@ -365,6 +368,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
 <script src="{{ url_for('static', filename='runner.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
+<script src="{{ url_for('static', filename='autograde.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>
 <script src="{{ url_for('static', filename='split.js') }}"></script>

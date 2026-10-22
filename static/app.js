@@ -105,22 +105,41 @@
   /* A theme bought in the shop (xp.js namedTheme): its own CodeMirror
      colours, and the button offers the way back to light/dark. */
   var named = window.PyIDEXP ? window.PyIDEXP.namedTheme() : "";
-  if (named) {
+  function showNamed() {
     editor.setOption("theme", "pyide-" + named);
     themeGlyph.textContent = "🎨";
-    themeBtn.title = "Your theme — click for ordinary light or dark";
+    themeBtn.title = "Your theme — click for light, then dark, then back";
     themeBtn.setAttribute("aria-label", themeBtn.title);
+  }
+  // In dark, the next click brings their theme back (xp.js), so say so.
+  function hintBack() {
+    if (named || currentTheme() !== "dark" || !window.PyIDEXP || !window.PyIDEXP.lastTheme()) return;
+    themeGlyph.textContent = "🎨";
+    themeBtn.title = "Back to your theme";
+    themeBtn.setAttribute("aria-label", themeBtn.title);
+  }
+  if (named) {
+    showNamed();
   } else {
     applyTheme(currentTheme(), false);
+    hintBack();
   }
   themeBtn.addEventListener("click", function () {
     if (named) {
       named = "";
       window.PyIDEXP.clearTheme();
-      applyTheme(systemPrefersLight() ? "light" : "dark", true);
+      applyTheme("light", true);
+      return;
+    }
+    if (currentTheme() === "dark" && window.PyIDEXP && window.PyIDEXP.lastTheme()) {
+      window.PyIDEXP.restoreTheme().then(function (t) {
+        if (t) { named = t; showNamed(); relayout(); }
+        else applyTheme("light", true);
+      });
       return;
     }
     applyTheme(currentTheme() === "light" ? "dark" : "light", true);
+    hintBack();
   });
 
   if (window.matchMedia) {
