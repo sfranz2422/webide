@@ -2365,7 +2365,7 @@ _editor_page = teacher.get("/new").get_data(as_text=True)
 _ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>',
                         _editor_page)
 check("the editor has handles too",
-      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-preview"]
+      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-page", "editor-preview"]
       and ("y", "editor-class", ' data-size="next"') in _ed_splits
       and -1 < _editor_page.find("/static/split.js") < _editor_page.find("/static/app.js"),
       _ed_splits)
