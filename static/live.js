@@ -1314,18 +1314,53 @@
     outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
   }
 
+  /* The run itself, on THEIR page — never the mirror's. Whoever asked
+     shows the results: the notes' tests cards (checks_in_notes.js), or the
+     console. Null when it can't run now. */
+  async function runLiveChecks() {
+    var tests = liveTests();
+    if (checking || !tests.length) return null;
+    checking = true;
+    checkBtn.disabled = true;
+    try {
+      var got = await window.WebIDETests.run(allFiles(), tests);
+      if (L.signedIn && L.assignment) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: L.assignment, results: got.results })
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
+            if (d && d.xp > 0 && window.PyIDEXP) {
+              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
+            }
+          })
+          .catch(function () {});
+      }
+      return got;
+    } finally {
+      checking = false;
+      checkBtn.disabled = false;
+    }
+  }
+  if (window.IDENotesChecks && checkBtn) window.IDENotesChecks.setRunner(runLiveChecks);
+
+  /* The ✔ Check my work above their editor: into the notes' card when one
+     is on screen, as the card's own button does; the console otherwise. */
   async function checkWork() {
     var tests = liveTests();
     if (checking || !tests.length) return;
-    checking = true;
-    checkBtn.disabled = true;
-    var files = allFiles();                // theirs, never the mirror's
+    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
+      await window.IDENotesChecks.check();
+      return;
+    }
     openConsole(true);
     clearOutput();
     write("Checking your page against " + tests.length + " test" +
           (tests.length === 1 ? "" : "s") + "…\n", "dim");
     try {
-      var got = await window.WebIDETests.run(files, tests);
+      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runLiveChecks();
+      if (!got) return;
       clearOutput();
       // Under the slide each test is on, as in the editor.
       var where = window.WebIDETests.places({ "notes.md": liveNotes }, window.WebIDENotes) || [], last = null, heads = [];
@@ -1344,24 +1379,8 @@
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
       scrollToSlide(heads);
-      if (L.signedIn && L.assignment) {
-        fetch("/api/tests/self", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignment: L.assignment, results: got.results })
-        }).then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
-            if (d && d.xp > 0 && window.PyIDEXP) {
-              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
-            }
-          })
-          .catch(function () {});
-      }
     } catch (e) {
       write(String(e && e.message || e) + "\n", "err");
-    } finally {
-      checking = false;
-      checkBtn.disabled = false;
     }
   }
 

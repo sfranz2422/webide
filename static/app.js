@@ -302,7 +302,10 @@
   var notesSlides = window.WebIDENotes.slideView(notesBody, {
     animate: function () { return !window.WEBIDE.readonly && !liveCode; },
     skip: function () { return !!window.WEBIDE.authoring; },
-    key: (window.WEBIDE.authoring ? "author:" : "") + (window.WEBIDE.assignmentSlug || location.pathname)
+    key: (window.WEBIDE.authoring ? "author:" : "") + (window.WEBIDE.assignmentSlug || location.pathname),
+    // `locked: yes` holds the next slide until its checks pass — for a
+    // student working, never the teacher writing them, nor while live.
+    locked: function () { return !window.WEBIDE.authoring && !window.WEBIDE.readonly && !liveCode; }
   });
 
   function showNotes(name) {
@@ -751,19 +754,60 @@
     outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
   }
 
-  async function checkWork() {
-    if (checking) return;
+  /* The run itself: every test in the notes, on the page as it is now
+     (in a frame of its own; autograde.js). Whoever asked shows the
+     results — the notes' tests cards (checks_in_notes.js), or the output —
+     and the student's result is kept for the teacher here, either way.
+     Null when it can't run now. */
+  async function runChecks() {
+    if (checking) return null;
     var files = allFiles(), tests = testsHere();
-    if (!tests.length) return;
+    if (!tests.length) return null;
     checking = true;
     checkBtn.disabled = true;
+    try {
+      var got = await window.WebIDETests.run(files, tests);
+      if (window.WEBIDE.signedIn && window.WEBIDE.assignmentSlug && !window.WEBIDE.viewOnly) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: window.WEBIDE.assignmentSlug, results: got.results })
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
+            if (d && d.xp > 0 && window.PyIDEXP) {
+              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
+            }
+          })
+          .catch(function () {});
+      }
+      return got;
+    } finally {
+      checking = false;
+      checkBtn.disabled = false;
+    }
+  }
+  // The notes' own ✔ Check my work, on each tests card.
+  if (window.IDENotesChecks && checkBtn) window.IDENotesChecks.setRunner(runChecks);
+
+  /* The ✔ Check my work at the top. With a tests card on screen, the
+     results go there, beside the step they're about; without one (the
+     notes put away, or a slide with no tests), to the output, under the
+     slide each is on. */
+  async function checkWork() {
+    if (checking || !testsHere().length) return;
+    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
+      await window.IDENotesChecks.check();
+      return;
+    }
+    var files = allFiles(), tests = testsHere();
     if (window.WebIDENotes.isMarkdown(active)) switchTo(lastCodeFile);
     showPreview();
     clearOutput();
     write("Checking your page against " + tests.length + " test" +
           (tests.length === 1 ? "" : "s") + "…\n", "dim");
     try {
-      var got = await window.WebIDETests.run(files, tests);
+      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runChecks();
+      if (!got) return;
       clearOutput();
       /* Under the slide each test is on (places): students check after
          every step, and want the step they're on. */
@@ -785,24 +829,8 @@
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
       scrollToSlide(heads);
-      if (window.WEBIDE.signedIn && window.WEBIDE.assignmentSlug && !window.WEBIDE.viewOnly) {
-        fetch("/api/tests/self", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignment: window.WEBIDE.assignmentSlug, results: got.results })
-        }).then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
-            if (d && d.xp > 0 && window.PyIDEXP) {
-              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
-            }
-          })
-          .catch(function () {});
-      }
     } catch (e) {
       write(String(e) + "\n", "err");
-    } finally {
-      checking = false;
-      checkBtn.disabled = false;
     }
   }
   if (checkBtn) {
