@@ -261,34 +261,6 @@
 </pre>
     </div>
 
-    {#  Only seen while both are up: a student has the notes under the
-        page, as on the live page (app.js, notesBeside). #}
-    <div class="resizer resizer-y" data-split="editor-page"></div>
-
-    <div id="notes-view" class="subpane" hidden>
-      <div class="pane-head">
-        <span id="notes-name">Notes</span>
-        {% if authoring %}
-          <a class="linkbtn" href="{{ url_for('help_questions') }}" target="_blank" rel="noopener"
-             title="How to write ```quiz questions in these notes">Question formats</a>
-          <a class="linkbtn" href="{{ url_for('help_questions') }}#tests" target="_blank" rel="noopener"
-             title="A ```tests block: what Check my work and Check all check the code against">Tests</a>
-          <a class="linkbtn" href="{{ url_for('help_questions') }}#themes" target="_blank" rel="noopener"
-             title="A look for the slides: theme: and a name on the first line">Themes</a>
-          {#  Only a teacher may upload (/api/image); anyone else
-              authoring their own notes links to a picture by address. #}
-          {% if is_teacher %}
-            <button class="linkbtn js-popout" type="button"
-                    title="The notes as big slides in a tab of their own, for the projector. While you're live, moving there moves the class.">Pop out</button>
-            <button id="notes-pic" class="linkbtn" type="button"
-                    title="Upload a picture into the notes at the cursor — or paste one, or drop it on the source">Add picture</button>
-          {% endif %}
-          <button id="notes-edit" class="linkbtn">Edit source</button>
-        {% endif %}
-      </div>
-      <div id="notes-body" class="notes-body prose"></div>
-    </div>
-
     {#  While live: the notes exactly as the class's Notes pane has them —
         the one slide, when they are cut into slides. Without it the only
         way to know what the class was reading was to walk over and look at
@@ -313,6 +285,39 @@
       </div>
     {% endif %}
   </section>
+
+  {#  THE NOTES ARE A COLUMN OF THEIR OWN, beside the output rather than
+      under it: a slide, the code and what it made all on screen at once.
+      They shared the right-hand column, and a student checking their work
+      after every step had the slide squeezed to a strip or traded away.
+      The handle sizes the right-hand column; the notes take the rest, and
+      when they're hidden the other two widen into their space. (The live
+      page keeps its own layout: this is the editor only.) #}
+  <div class="resizer resizer-x" data-split="editor-right"></div>
+  <section id="notes-view" class="pane pane-notes" hidden>
+      <div class="pane-head">
+        <span id="notes-name">Notes</span>
+        {% if authoring %}
+          <a class="linkbtn" href="{{ url_for('help_questions') }}" target="_blank" rel="noopener"
+             title="How to write ```quiz questions in these notes">Question formats</a>
+          <a class="linkbtn" href="{{ url_for('help_questions') }}#tests" target="_blank" rel="noopener"
+             title="A ```tests block: what Check my work and Check all check the code against">Tests</a>
+          <a class="linkbtn" href="{{ url_for('help_questions') }}#themes" target="_blank" rel="noopener"
+             title="A look for the slides: theme: and a name on the first line">Themes</a>
+          {#  Only a teacher may upload (/api/image); anyone else
+              authoring their own notes links to a picture by address. #}
+          {% if is_teacher %}
+            <button class="linkbtn js-popout" type="button"
+                    title="The notes as big slides in a tab of their own, for the projector. While you're live, moving there moves the class.">Pop out</button>
+            <button id="notes-pic" class="linkbtn" type="button"
+                    title="Upload a picture into the notes at the cursor — or paste one, or drop it on the source">Add picture</button>
+          {% endif %}
+          <button id="notes-edit" class="linkbtn">Edit source</button>
+        {% endif %}
+        <button id="notes-close" class="linkbtn notes-close" type="button" title="Hide the notes (the notes button shows them again)">Hide</button>
+      </div>
+      <div id="notes-body" class="notes-body prose"></div>
+    </section>
 </main>
 
 {#  A teacher's Share asks first, because it can make two kinds of link.
@@ -401,6 +406,7 @@
 <script src="{{ url_for('static', filename='runner.js') }}"></script>
 <script src="{{ url_for('static', filename='autograde.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
+<script src="{{ url_for('static', filename='snippets.js') }}"></script>
 <script src="{{ url_for('static', filename='pictures.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>

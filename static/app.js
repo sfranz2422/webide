@@ -272,27 +272,23 @@
   function notesBeside() { return !window.WEBIDE.authoring; }
   var notesOpen = "";        // which notes are up, while notesBeside()
 
+  /* The notes are a column of their own now (index.html), so showing them
+     never hides the page and Run never hides them: both stay up until the
+     notes' Hide, or their button, puts them away. */
   function hideNotes() {
     notesView.hidden = true;
     notesOpen = "";
+    // The author's .md tab stops being the lit one with its notes away —
+    // unless its source is open in the editor, which is what they're editing.
+    if (window.WebIDENotes.isMarkdown(active) && !mdSourceOpen) active = lastCodeFile;
     renderTabs();
     relayout();
   }
+  var notesClose = $("notes-close");
+  if (notesClose) notesClose.addEventListener("click", hideNotes);
 
   function showPreview() {
     previewView.hidden = false;
-    if (notesBeside()) return;
-    notesView.hidden = true;
-    /* Whatever put the page up — Run, the syntax card, a game — the notes
-       are no longer on show, so the editor must stop saying they are.
-       Otherwise their button stayed lit after a Run, and the first press
-       "closed" notes that were already hidden: it took two presses to see
-       them again. While the author has the source open the .md is what
-       they are editing, and it stays the open file. */
-    if (window.WebIDENotes.isMarkdown(active) && !mdSourceOpen) {
-      active = lastCodeFile;
-      renderTabs();
-    }
   }
 
   /* Always as slides when the notes have `---` in them, with ◀ ▶ under
@@ -302,7 +298,6 @@
 
   function showNotes(name) {
     notesName.textContent = name;
-    if (!notesBeside()) previewView.hidden = true;
     notesView.hidden = false;
     notesSlides.show(docs[name].getValue());
   }
@@ -390,16 +385,13 @@
       var b = document.createElement("button");
       b.type = "button";
       b.className = "btn notes-btn";
-      var on = notesBeside() ? notesOpen === name : name === active;
+      var on = !notesView.hidden && (notesBeside() ? notesOpen === name : name === active);
       b.setAttribute("aria-pressed", String(on));
       b.textContent = name.replace(/\.(md|markdown)$/i, "");
-      b.title = on ? (notesBeside() ? "Hide " + name : "Back to the page") : "Show " + name;
+      b.title = on ? "Hide " + name : "Show " + name;
       b.addEventListener("click", function () {
-        // A second press hides them (or, taking turns, goes back to the page).
-        if (notesBeside()) {
-          if (notesOpen === name) hideNotes();
-          else switchTo(name);
-        } else if (active === name) switchTo(lastCodeFile);
+        // A second press hides them.
+        if (on) hideNotes();
         else switchTo(name);
       });
       notesBar.appendChild(b);

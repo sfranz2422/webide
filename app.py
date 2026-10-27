@@ -1873,6 +1873,25 @@ def quiz_answer():
             if not any(got):
                 return jsonify(error="Answer the question first."), 400
             response = json.dumps(got)
+        elif key.kind in ("order", "sort"):
+            # The lines in the student's order, or each item's group, one
+            # per line or item as the question showed them (quiz.py). An
+            # order that isn't those same lines is a page out of step with
+            # the question, refused like a wrong number of blanks.
+            got = quiz.items(response)
+            shown = json.loads(key.choices or "[]")
+            if (not response.lstrip().startswith("[") or len(got) != len(shown)
+                    or any(len(g) > 300 for g in got)
+                    or (key.kind == "order" and sorted(got) != sorted(shown))):
+                return jsonify(error="This question has changed since the page "
+                                     "loaded. Reload to get the new one."), 400
+            if key.kind == "sort" and not all(g in json.loads(key.answers or "[]") for g in got):
+                return jsonify(error="Put every item in a group first."), 400
+            response = json.dumps(got)
+        elif key.kind == "bug":
+            response = response.strip()
+            if not response.isdigit() or len(response) > 4:
+                return jsonify(error="Click the line with the bug first."), 400
         elif key.kind == "long":
             # Cleaned here whatever the page did: it is drawn as markup on
             # the teacher's screen (quiz.clean_html says why).
@@ -2464,7 +2483,7 @@ def _answers_for_teacher(db, item):
         else:
             part = _mark(key, a.response) if key is not None else 0.0
             shown = a.response
-            if kind in ("blank", "match"):
+            if kind in ("blank", "match", "order", "sort", "bug"):
                 shown = quiz.response_text(kind, a.response, json.loads(key.choices or "[]"))
             one.update(response=shown, right=part == 1.0, partial=0 < part < 1)
         out.setdefault(a.student_id, []).append(one)
@@ -7161,6 +7180,15 @@ QUESTION_EXAMPLES = [
     ('choice', 'Code in a question',
      'Put code inside a ~~~ fence. Nothing in it is read as a choice or an answer.',
      'What colour is the heading?\n~~~html\n<h1 style="color: red">Hi</h1>\n~~~\n- [x] Red\n- [ ] Black\n- [ ] Blue'),
+    ('order', 'Put in order',
+     "type: order, then the lines in the RIGHT order, each after - and a space (indentation after that is kept). Students get them shuffled and put them back in order. A line in the wrong place costs that line, not every line after it.",
+     "type: order\nPut the lines in order to make a list.\n- <ul>\n-   <li>Apples</li>\n-   <li>Pears</li>\n- </ul>\npoints: 3"),
+    ('bug', 'Find the bug',
+     "type: bug, the code in a ~~~ fence, and bug: with the number of the line that's wrong, counting from 1 (bug: 2, 3 accepts either). Students click the line.",
+     "type: bug\nWhich line has the mistake?\n~~~html\n<h1>Fruit</h1>\n<p>Apples are red</p\n<p>Pears are green</p>\n~~~\nbug: 2"),
+    ('sort', 'Sort into groups',
+     "type: sort, then a group: line for each group with its items under it, each after - . Students get every item in a tray, shuffled, and put each in a group by clicking it then the group, or dragging. Each item is worth its share of the points.",
+     "type: sort\nSort each into tags and attributes.\ngroup: Tag\n- `<p>`\n- `<img>`\ngroup: Attribute\n- `href`\n- `alt`\npoints: 4"),
 ]
 
 
@@ -7181,13 +7209,32 @@ def notes_present():
         db.close()
 
 
+# Things in notes that aren't questions — nothing is marked, nothing is
+# sent. Shown on the help page under the questions, each as written and as
+# it looks; test_quiz.py checks each one draws into what it should.
+NOTES_EXTRAS = [
+    ("run", "Code that runs",
+     "Write html run after the three backticks, and students get the page's code in a box they can change, with Run under it; the page shows under that, in a frame of its own that can't touch theirs.",
+     "```html run\n<h1 style=\"color: tomato\">Hello!</h1>\n<p>Change the colour and run it again.</p>\n```"),
+    ("tasks", "Checklists",
+     "- [ ] at the start of a list item makes a box students can tick. What's ticked is "
+     "kept in their browser, for them — nothing is sent or marked. - [x] starts ticked.",
+     "- [ ] Read the notes\n- [ ] Try the example\n- [ ] Turn it in"),
+    ("cards", "Flip cards",
+     "A cards block, one card per line: front -> back. A click turns a card over. "
+     "Good for words to learn.",
+     "```cards\ntag -> a word in angle brackets, like `<p>`\nattribute -> a setting inside a tag, like `href=`\nCSS -> how the page looks\n```"),
+]
+
+
 @app.get("/help/questions")
 def help_questions():
     """How to write questions in notes. Open to anyone: it is the format,
     nothing more, and a teacher may want it before they have signed in."""
     return render_template("help_questions.html", examples=[
         {"kind": k, "title": t, "about": a, "block": "```quiz\n%s\n```" % b}
-        for k, t, a, b in QUESTION_EXAMPLES])
+        for k, t, a, b in QUESTION_EXAMPLES], extras=[
+        {"kind": k, "title": t, "about": a, "block": b} for k, t, a, b in NOTES_EXTRAS])
 
 
 if __name__ == "__main__":
