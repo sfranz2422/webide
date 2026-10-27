@@ -294,7 +294,16 @@
   /* Always as slides when the notes have `---` in them, with ◀ ▶ under
      them (notes.js, slideView) — here, on a shared link, and on the class's
      page in a live lesson alike. */
-  var notesSlides = window.WebIDENotes.slideView(notesBody);
+  // `animate:` notes play a section at a time (notes.js, slideView): for a
+  // student reading them, and for whoever is writing them, who gets Skip to
+  // get past a part, or a slide, while they edit. Never while teaching live:
+  // the projector shows the slide whole. Asked each time the notes are
+  // shown, since going live and ending a lesson both change the answer.
+  var notesSlides = window.WebIDENotes.slideView(notesBody, {
+    animate: function () { return !window.WEBIDE.readonly && !liveCode; },
+    skip: function () { return !!window.WEBIDE.authoring; },
+    key: (window.WEBIDE.authoring ? "author:" : "") + (window.WEBIDE.assignmentSlug || location.pathname)
+  });
 
   function showNotes(name) {
     notesName.textContent = name;
@@ -1688,6 +1697,10 @@
 
     function paintLive() {
       renderTabs();          // live, the notes are a button (notesAsButtons)
+      // Live, the notes show whole (no playing a part at a time); after, they play again.
+      if (!notesView.hidden && notesName.textContent && docs[notesName.textContent]) {
+        notesSlides.show(docs[notesName.textContent].getValue());
+      }
       if (liveCode) {
         liveBtn.textContent = "End lesson";
         liveBtn.classList.add("btn-live-on");
