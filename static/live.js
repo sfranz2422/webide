@@ -1354,6 +1354,17 @@
       await window.IDENotesChecks.check();
       return;
     }
+    // No card on screen: the notes turned to the slide that needs them (checks_in_notes.js).
+    if (window.IDENotesChecks && notesSlides) {
+      var shown = await window.IDENotesChecks.checkInNotes({
+        markdown: function () { return liveNotes; },
+        open: function () {},
+        slides: window.WebIDENotes.slides,
+        tests: function (text) { return window.WebIDETests.parse(text).tests; },
+        viewer: notesSlides
+      });
+      if (shown !== false) return;
+    }
     openConsole(true);
     clearOutput();
     write("Checking your page against " + tests.length + " test" +
