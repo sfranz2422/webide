@@ -358,6 +358,19 @@ that isn't theirs refuses the whole save. The calendar is not copied by
 Duplicate class: a week is out of date by next semester. `test_calendar.py`
 (the same in all three) runs calendar.js in node.
 
+**The teacher's own slides** (`TeacherDeck` in `app.py`, table
+`teacher_decks`; `teacher_deck`, `upload_teacher_deck`). One HTML file per
+assignment that the teacher made elsewhere and presents from: Upload / Replace
+teacher lesson at the top of the assignment's page, and a link that opens it
+in a new tab at `/teacher/<slug>/slides`, and Download beside it for the
+file as it is now (`?download=1`, under the name it was uploaded with). WebIDE's own table, not
+`accounts.py`'s, so nothing has to be copied to the other repos. It is served
+as uploaded, scripts and all, with the viewer's sign-in, so **only the teacher
+who set the assignment can open it**. It is not sandboxed like `/img`,
+because the decks keep their class list in localStorage and a sandboxed page
+has none. The page sends it base64 in JSON, because Render's firewall blocks a
+body full of `<script>` before the app sees it. `test_teacher_deck.py`.
+
 ## Style
 
 Comments explain *why*, and especially name the failures that are silent.
