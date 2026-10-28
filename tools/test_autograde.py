@@ -161,8 +161,6 @@ check("  under that slide's heading, not a # in its code",
       [(p or {}).get("title") for p in placed or []]
       == ["Lesson", "Step 1 — show_title", "Step 2 — round_header", "Step 2 — round_header"], placed)
 check("  and notes without slides get no headings", flat == [None], flat)
-appjs = open(os.path.join(ROOT, "static", "app.js")).read()
-check("Check my work shows the headings", ".places(" in appjs and '"slide-head"' in appjs)
 
 # ------------------------------------------ the checks, in a real browser
 print("\nRunning the checks (headless Chrome)")
@@ -466,8 +464,9 @@ authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
 check("the teacher's edit page links to how to write tests",
       'href="/help/questions#tests"' in authoring)
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
-check("the editor has Check my work and loads autograde.js",
-      'id="check"' in editor and "autograde.js" in editor)
+# Checking is on the notes' tests cards only; the button at the top came out.
+check("the editor loads autograde.js, with no Check my work at the top",
+      'id="check"' not in editor and "autograde.js" in editor)
 
 # Ben fixes his work: the next check pays the tests that now pass, only.
 before = test_xp(BEN)
@@ -487,26 +486,20 @@ polled = amy.get("/api/live/%s" % LIVE).get_json() or {}
 check("the tests reach the class with the notes",
       "```tests\nuses for" in (polled.get("notes") or ""), polled.get("notes"))
 livepage = amy.get("/live/%s" % LIVE).get_data(as_text=True)
-check("the live page has Check my work, and the tests to run",
-      'id="check"' in livepage and "autograde.js" in livepage)
+check("the live page has the tests to run, and no Check my work at the top",
+      'id="check"' not in livepage and "autograde.js" in livepage)
 livejs = open(os.path.join(ROOT, "static", "live.js")).read()
-# The run (runLiveChecks, which the notes' cards use too) and the button (checkWork).
-body = ""
-for fn in ("async function runLiveChecks", "async function checkWork"):
-    at = livejs.find(fn)
-    body += re.sub(r"//[^\n]*", "", livejs[at:livejs.find("\n  }\n", at)]) if at >= 0 else ""
-check("  which runs THEIR code, never the mirror, under slide headings",
-      body and "allFiles()" in body and "mirror" not in body.lower() and ".places(" in body
-      and 'checkBtn.addEventListener("click", checkWork)' in livejs, body[:80])
+# The run the notes' cards use (runLiveChecks), registered unconditionally:
+# WebIDE's once waited for the top button, which would now leave none.
+at = livejs.find("async function runLiveChecks")
+body = re.sub(r"//[^\n]*", "", livejs[at:livejs.find("\n  }\n", at)]) if at >= 0 else ""
+check("  which runs THEIR code, never the mirror",
+      body and "allFiles()" in body and "mirror" not in body.lower()
+      and re.search(r"\n  if \(window\.IDENotesChecks\) window\.IDENotesChecks\.setRunner\([^\n]*runLiveChecks", livejs),
+      body[:80])
 
 # ------------------------------------------- the step's slide, beside its results
-print("\nA student sees the notes beside the results, opened at their slide")
-for page in ("app.js", "live.js"):
-    js = open(os.path.join(ROOT, "static", page)).read()
-    at = js.find("async function checkWork")
-    body = js[at:js.find("\n  }\n", at)] if at >= 0 else ""
-    check("  " + page + "'s results open at the slide the student is on",
-          "function scrollToSlide" in js and "scrollToSlide(heads)" in body and "heads.push(" in body)
+print("\nThe notes stay up beside the output")
 appjs = open(os.path.join(ROOT, "static", "app.js")).read()
 fn = appjs[appjs.find("function showPreview() {"):]
 fn = fn[:fn.find("\n  }\n")]

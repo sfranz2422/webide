@@ -732,39 +732,25 @@
      page as it is in the editor now, as often as the student likes. It is
      feedback: the result is kept for the teacher to see, but what counts is
      the teacher's Check all on what was turned in — a check run in this
-     browser could be faked. Shown only when the notes have tests. */
-  var checkBtn = $("check");
+     browser could be faked. Only from the ✔ on the notes' tests cards
+     (checks_in_notes.js): the button at the top came out, so students
+     check beside the step. The cards' runner was once registered only when
+     that button was there, which would now leave them nothing to run. */
   var checking = false;
 
   function testsHere() {
     return window.WebIDETests ? window.WebIDETests.fromFiles(allFiles()).tests : [];
   }
 
-  function refreshCheck() {
-    if (checkBtn) checkBtn.hidden = !testsHere().length;
-  }
-
-  /* Check my work's results open at the slide the student is reading — the
-     step they just did — rather than at the end of a long list. That slide's
-     heading, or the last one before it when it has no tests of its own. */
-  function scrollToSlide(heads) {
-    if (!heads.length || notesView.hidden || notesSlides.count() < 2) return;
-    var on = notesSlides.at() + 1, pick = heads[0];
-    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
-    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
-  }
-
   /* The run itself: every test in the notes, on the page as it is now
-     (in a frame of its own; autograde.js). Whoever asked shows the
-     results — the notes' tests cards (checks_in_notes.js), or the output —
-     and the student's result is kept for the teacher here, either way.
-     Null when it can't run now. */
+     (in a frame of its own; autograde.js). The notes' tests cards
+     (checks_in_notes.js) show the results; the student's result is kept
+     for the teacher here. Null when it can't run now. */
   async function runChecks() {
     if (checking) return null;
     var files = allFiles(), tests = testsHere();
     if (!tests.length) return null;
     checking = true;
-    checkBtn.disabled = true;
     try {
       var got = await window.WebIDETests.run(files, tests);
       if (window.WEBIDE.signedIn && window.WEBIDE.assignmentSlug && !window.WEBIDE.viewOnly) {
@@ -783,72 +769,11 @@
       return got;
     } finally {
       checking = false;
-      checkBtn.disabled = false;
     }
   }
   // The notes' own ✔ Check my work, on each tests card.
-  if (window.IDENotesChecks && checkBtn) window.IDENotesChecks.setRunner(runChecks);
+  if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
 
-  /* The ✔ Check my work at the top. With a tests card on screen, the
-     results go there, beside the step they're about; without one (the
-     notes put away, or a slide with no tests), to the output, under the
-     slide each is on. */
-  async function checkWork() {
-    if (checking || !testsHere().length) return;
-    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
-      await window.IDENotesChecks.check();
-      return;
-    }
-    // No card on screen: the notes, opened at the slide that needs them (checks_in_notes.js).
-    if (window.IDENotesChecks && notesBeside()) {
-      var notes = notesOpen || fileNames().filter(window.WebIDENotes.isMarkdown)[0];
-      var shown = await window.IDENotesChecks.checkInNotes({
-        markdown: function () { return notes ? docs[notes].getValue() : null; },
-        open: function () { if (notesView.hidden || notesOpen !== notes) switchTo(notes); },
-        slides: window.WebIDENotes.slides,
-        tests: function (text) { return window.WebIDETests.parse(text).tests; },
-        viewer: notesSlides
-      });
-      if (shown !== false) return;
-    }
-    var files = allFiles(), tests = testsHere();
-    if (window.WebIDENotes.isMarkdown(active)) switchTo(lastCodeFile);
-    showPreview();
-    clearOutput();
-    write("Checking your page against " + tests.length + " test" +
-          (tests.length === 1 ? "" : "s") + "…\n", "dim");
-    try {
-      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runChecks();
-      if (!got) return;
-      clearOutput();
-      /* Under the slide each test is on (places): students check after
-         every step, and want the step they're on. */
-      var where = window.WebIDETests.places(files, window.WebIDENotes) || [], last = null;
-      var heads = [];
-      got.results.forEach(function (r, i) {
-        var w = where[i];
-        if (w && w !== last) {
-          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
-          heads.push({ slide: w.slide, el: outputEl.lastChild });
-          last = w;
-        }
-        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
-        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
-      });
-      var all = got.earned === got.possible;
-      write("\n" + got.earned + " of " + got.possible + " points" +
-            (all ? " — every test passes." : ".") + "\n");
-      write("This check is for you. What counts is your teacher's check of what " +
-            "you turn in.\n", "dim");
-      scrollToSlide(heads);
-    } catch (e) {
-      write(String(e) + "\n", "err");
-    }
-  }
-  if (checkBtn) {
-    checkBtn.addEventListener("click", checkWork);
-    refreshCheck();
-  }
   if (backBtn) backBtn.addEventListener("click", goBack);
 
   /* A link to another site, opened on the preview's behalf.

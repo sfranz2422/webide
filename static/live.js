@@ -50,7 +50,6 @@
 
   var outputEl = $("output");
   var runBtn = $("run");
-  var checkBtn = $("check");
   var liveNotes = "";        // the teacher's notes, for Check my work's tests
   var runLabel = $("run-label");
   var stopBtn = $("stop");
@@ -887,7 +886,6 @@
   function showNotes(data) {
     if (typeof data.notes === "string" && data.notes !== liveNotes) {
       liveNotes = data.notes;
-      refreshCheck();
     }
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
@@ -1300,28 +1298,15 @@
     return window.WebIDETests && liveNotes ? window.WebIDETests.parse(liveNotes).tests : [];
   }
 
-  function refreshCheck() {
-    if (checkBtn) checkBtn.hidden = !liveTests().length;
-  }
-
-  /* The results open at the slide the student is reading — the step they
-     just did — not at the end of the list: that slide's heading, or the
-     last one before it when it has no tests of its own. */
-  function scrollToSlide(heads) {
-    if (!heads.length || !notesView || notesView.hidden || !notesSlides || notesSlides.count() < 2) return;
-    var on = notesSlides.at() + 1, pick = heads[0];
-    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
-    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
-  }
-
-  /* The run itself, on THEIR page — never the mirror's. Whoever asked
-     shows the results: the notes' tests cards (checks_in_notes.js), or the
-     console. Null when it can't run now. */
+  /* The run itself, on THEIR page — never the mirror's, from the ✔ on
+     the notes' tests cards (checks_in_notes.js), which show the results.
+     There is no button above their editor any more. The runner was once
+     registered only when that button was there; with it gone, that would
+     have left every card with nothing to run. Null when it can't run now. */
   async function runLiveChecks() {
     var tests = liveTests();
     if (checking || !tests.length) return null;
     checking = true;
-    checkBtn.disabled = true;
     try {
       var got = await window.WebIDETests.run(allFiles(), tests);
       if (L.signedIn && L.assignment) {
@@ -1340,60 +1325,9 @@
       return got;
     } finally {
       checking = false;
-      checkBtn.disabled = false;
     }
   }
-  if (window.IDENotesChecks && checkBtn) window.IDENotesChecks.setRunner(runLiveChecks);
-
-  /* The ✔ Check my work above their editor: into the notes' card when one
-     is on screen, as the card's own button does; the console otherwise. */
-  async function checkWork() {
-    var tests = liveTests();
-    if (checking || !tests.length) return;
-    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
-      await window.IDENotesChecks.check();
-      return;
-    }
-    // No card on screen: the notes turned to the slide that needs them (checks_in_notes.js).
-    if (window.IDENotesChecks && notesSlides) {
-      var shown = await window.IDENotesChecks.checkInNotes({
-        markdown: function () { return liveNotes; },
-        open: function () {},
-        slides: window.WebIDENotes.slides,
-        tests: function (text) { return window.WebIDETests.parse(text).tests; },
-        viewer: notesSlides
-      });
-      if (shown !== false) return;
-    }
-    openConsole(true);
-    clearOutput();
-    write("Checking your page against " + tests.length + " test" +
-          (tests.length === 1 ? "" : "s") + "…\n", "dim");
-    try {
-      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runLiveChecks();
-      if (!got) return;
-      clearOutput();
-      // Under the slide each test is on, as in the editor.
-      var where = window.WebIDETests.places({ "notes.md": liveNotes }, window.WebIDENotes) || [], last = null, heads = [];
-      got.results.forEach(function (r, i) {
-        var w = where[i];
-        if (w && w !== last) {
-          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
-          heads.push({ slide: w.slide, el: outputEl.lastChild });
-          last = w;
-        }
-        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
-        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
-      });
-      write("\n" + got.earned + " of " + got.possible + " points" +
-            (got.earned === got.possible ? " — every test passes." : ".") + "\n");
-      write("This check is for you. What counts is your teacher's check of what " +
-            "you turn in.\n", "dim");
-      scrollToSlide(heads);
-    } catch (e) {
-      write(String(e && e.message || e) + "\n", "err");
-    }
-  }
+  if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
 
   /* XP for their page working: loaded, and no error from it in the next
      moment and a half (app.js says why). Theirs only — the mirror is never
@@ -1480,7 +1414,6 @@
   runBtn.disabled = false;
   runLabel.textContent = "Run";
   runBtn.addEventListener("click", run);
-  if (checkBtn) checkBtn.addEventListener("click", checkWork);
 
   /* ------------------------------------------------ their page in a new tab
    *
