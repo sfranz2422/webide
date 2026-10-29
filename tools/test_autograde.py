@@ -349,6 +349,14 @@ SLUG = teacher.post("/api/class/%d/new" % CLASS, json={"title": "My site"}).get_
 teacher.post("/api/assignment/%s" % SLUG, json={"title": "My site",
                                                 "files": dict(RIGHT, **{"notes.md": NOTES})})
 set_notes(teacher, SLUG, NOTES)   # the notes are the library's (library.py)
+_page = teacher.get("/teacher/%s" % SLUG).get_data(as_text=True)
+check("an empty Out of is filled with what the tests are worth, not yet saved",
+      re.search(r'id="out-of"[^>]*value="14"', _page) is not None and "Not saved yet" in _page)
+teacher.post("/api/assignment/%s/out-of" % SLUG, json={"out_of": 5})
+_page = teacher.get("/teacher/%s" % SLUG).get_data(as_text=True)
+check("  a saved Out of below that is kept, and said to be too low",
+      re.search(r'id="out-of"[^>]*value="5"', _page) is not None and "That's more than Out of" in _page
+      and "Not saved yet" not in _page)
 teacher.post("/api/assignment/%s/out-of" % SLUG, json={"out_of": 14})
 
 
@@ -452,7 +460,7 @@ check("  nor another teacher",
 page = teacher.get("/teacher/" + SLUG).get_data(as_text=True)
 check("the results page has Check all, and each student's tests",
       "tests-check-all" in page and "Tests 14 / 14" in page and "✗ h1 color is red" in page)
-check("  and says how many tests the notes have", "13 tests" in page and "14 points" in page)
+check("  and says how many tests the notes have", "13 tests: 14 pts" in page)
 mine = amy.get("/my").get_data(as_text=True)
 check("My work shows the grade with the tests in it",
       "Score: <strong>14 / 14</strong>" in mine and "14 from the questions and tests" in mine)
