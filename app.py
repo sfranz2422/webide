@@ -2424,8 +2424,33 @@ def _write_notes(db, item, text):
     _store_quiz_keys(db, item.id, [text])
 
 
+class _Deck:
+    """A deck as the routes use it: its file name and HTML."""
+    def __init__(self, name, html):
+        self.name, self.html = name, html
+
+
+def _deck_of(db, item):
+    """An assignment's teacher deck: the library's (library.py), else one
+    still only in teacher_decks from before the library took it in."""
+    d = library.deck_of(db, item)
+    if d is not None:
+        return _Deck(d.title if re.search(r"\.html?$", d.title, re.I) else d.title + ".html", d.body)
+    return db.query(TeacherDeck).filter_by(assignment_id=item.id).first()
+
+
+def _old_decks(db, user):
+    """This teacher's decks still only in teacher_decks, for the library's import."""
+    rows = (db.query(TeacherDeck, accounts.Assignment)
+            .join(accounts.Assignment, accounts.Assignment.id == TeacherDeck.assignment_id)
+            .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app == APP_NAME,
+                    accounts.Assignment.deck_id.is_(None)).all())
+    return [(a, d.name, d.html) for d, a in rows]
+
+
 library.init(
     app,
+    old_decks=_old_decks,
     app_name=APP_NAME,
     session=lambda: SessionLocal(),
     current_user=lambda db: current_user(db),
@@ -2435,7 +2460,10 @@ library.init(
     assignment_url=lambda item: url_for("teacher_assignment", slug=item.slug),
     page=lambda db, user: {"brand": "WebIDE", "logo": "🎨", "ns": "WebIDE", "theme_key": "webide-theme",
                            "home_url": url_for("teacher_home"), "help_url": url_for("help_questions"),
-                           "max_tutorial": library.MAX_TUTORIAL},
+                           "max_tutorial": library.MAX_TUTORIAL,
+                           # Its tests are typed as lines in the tutorial editor (PresMaker):
+                           # the form there knows only PyIDE's kinds.
+                           "pm_tests": "lines", "pm_test_examples": ['has h1', 'has exactly 2 img', 'h1 contains Welcome', 'img has alt', 'links to about.html', 'h1 color is red', 'click #btn -> #out contains 1', 'logs Hello', 'uses addEventListener', 'defines greet', 'about.html: has h2  (2 points)']},
 )
 
 
@@ -2897,7 +2925,7 @@ def teacher_assignment(slug):
         library.import_existing(db, user)
         db.refresh(item)
         ctx.update(library.tutorial_box(db, user, item))
-        ctx.update(deck=db.query(TeacherDeck).filter_by(assignment_id=item.id).first())
+        ctx.update(deck=_deck_of(db, item))
         return render_template("teacher_assignment.html", **ctx)
     finally:
         db.close()
@@ -2989,7 +3017,9 @@ def teacher_deck(slug):
             slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
-        deck = db.query(TeacherDeck).filter_by(assignment_id=item.id).first()
+        library.import_existing(db, user)
+        db.refresh(item)
+        deck = _deck_of(db, item)
         if deck is None:
             abort(404)
         if request.args.get("download"):
@@ -3044,14 +3074,12 @@ def upload_teacher_deck(slug):
         if not re.match(r"\s*(<!--.*?-->\s*)*<(!doctype\s+html|html|head|body)\b",
                         html[:20000], re.I | re.S):
             return jsonify(error="That isn't an HTML file."), 400
-        deck = db.query(TeacherDeck).filter_by(assignment_id=item.id).first()
-        if deck is None:
-            deck = TeacherDeck(assignment_id=item.id)
-            db.add(deck)
-        deck.name, deck.html, deck.size = name, html, len(data)
-        deck.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        return jsonify(ok=True, name=deck.name,
+        # Into the library (library.py): its deck replaced, or a new one
+        # made and linked. teacher_decks is only read, for decks from before.
+        library.import_existing(db, user)
+        db.refresh(item)
+        deck = library.set_deck(db, item, name, html)
+        return jsonify(ok=True, name=deck.title,
                        url=url_for("teacher_deck", slug=item.slug))
     finally:
         db.close()

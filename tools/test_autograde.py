@@ -473,8 +473,10 @@ bare = "\n".join(re.split(r"\s{3,}", ln)[0] for ln in example.split("\n"))
 got, bad = autograde.parse(bare)
 check("the help page's example is all tests", len(got) == 12 and not bad, (len(got), bad))
 authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
-check("the teacher's edit page links to how to write tests",
-      'href="/help/questions#tests"' in authoring)
+# Writing tests is the tutorial editor's now (the library's, PresMaker, + Tests):
+# the editor's link to the format came out (the teacher's call).
+check("writing the notes in the editor, the format link is gone: the tutorial editor has + Tests",
+      'help/questions#tests"' not in authoring)
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
 # Checking is on the notes' tests cards only; the button at the top came out.
 check("the editor loads autograde.js, with no Check my work at the top",
