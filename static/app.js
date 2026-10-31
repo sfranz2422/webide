@@ -1006,6 +1006,10 @@
      where a click on the logo would throw typing away without a word, so
      that one asks. */
   var typedHere = false;
+  // Update assignment (or Publish) saved what's here: nothing to lose now.
+  // Without this the teacher's own edit page, which has no draft, warned
+  // "isn't saved" right after a successful update.
+  document.addEventListener("webide:assignmentsaved", function () { typedHere = false; });
   var homeLink = document.getElementById("home-link");
   if (homeLink) {
     homeLink.addEventListener("click", function (e) {

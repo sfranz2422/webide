@@ -302,6 +302,8 @@ window.WebIDEAccount = (function () {
           say("\n" + (out.data.error || "Couldn't save that.") + "\n", "err");
           return;
         }
+        // The page's "isn't saved" check on leaving (app.js) listens for this.
+        document.dispatchEvent(new CustomEvent("webide:assignmentsaved"));
         var n = out.data.already_started || 0;
         /* Say plainly who this reaches. A teacher fixing a typo needs to know
            it does not rewrite work already in progress — and equally that
@@ -362,6 +364,8 @@ window.WebIDEAccount = (function () {
           say("\n" + (out.data.error || "Couldn't publish that.") + "\n", "err");
           return;
         }
+        // The page's "isn't saved" check on leaving (app.js) listens for this.
+        document.dispatchEvent(new CustomEvent("webide:assignmentsaved"));
         $("modal-title").textContent = "Assignment published";
         $("modal-sub").textContent =
           "Hand this link to your class. Each student gets their own copy.";
