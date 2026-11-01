@@ -20,6 +20,10 @@
   window.WebIDENotes.setQuizContext({ assignment: window.WEBIDE.assignmentSlug,
                                       signedIn: window.WEBIDE.signedIn,
                                       viewOnly: window.WEBIDE.viewOnly });
+  // Predictions in the notes: XP for a first-try one, and the teacher
+  // writing them is never held by one (snippets.js).
+  if (window.IDESnippets) window.IDESnippets.configure({ assignment: window.WEBIDE.assignmentSlug,
+    signedIn: window.WEBIDE.signedIn, viewOnly: window.WEBIDE.viewOnly, teacher: !!window.WEBIDE.authoring });
   var frame = $("preview");
   var tabsEl = $("file-tabs");
 
